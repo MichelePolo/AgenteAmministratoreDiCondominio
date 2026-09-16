@@ -1,0 +1,10 @@
+{
+  "name": "amministratore-condominio",
+  "version": "0.2.0",
+  "description": "Amministratore di condominio agentico: archivia i documenti caricati dai condomini in una cartella Google Drive condivisa, tiene il registro, calcola i riparti millesimali, prepara convocazioni e solleciti, gestisce le scadenze in calendario. Prepara, l'umano approva.",
+  "author": { "name": "Michele Polo", "url": "https://github.com/MichelePolo" },
+  "homepage": "https://github.com/MichelePolo/AgenteAmministratoreDiCondominio",
+  "repository": "https://github.com/MichelePolo/AgenteAmministratoreDiCondominio",
+  "license": "MIT",
+  "keywords": ["condominio", "amministratore", "riparto", "millesimi", "assemblea", "italia"]
+}

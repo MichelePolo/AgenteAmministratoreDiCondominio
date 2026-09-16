@@ -1,0 +1,43 @@
+CARTELLA CONDIVISA DEL CONDOMINIO — COME FUNZIONA
+
+Questa cartella è di tutti i condomini. Contiene i documenti del condominio,
+ordinati e sempre consultabili. Non serve nessun programma particolare: basta
+il browser, oppure l'app Google Drive sul cellulare (tocca un file per vederlo).
+
+COSA PUOI FARE
+
+1. Hai una fattura, una bolletta, un preventivo, una foto di un guasto?
+   Mettila nella cartella  "da analizzare".
+   Entro pochi giorni verrà controllata, rinominata in modo leggibile
+   (es. 2026-03-14_fattura_enel_luce-scale_412.50.pdf) e spostata in
+   "archivio", nella cartella dell'anno e del tipo giusto.
+   Se sparisce da "da analizzare", vuol dire che è stata archiviata.
+
+2. Vuoi vedere i conti? Apri  registro-condominio.xlsx
+   - Anagrafica: chi c'è nel condominio
+   - Millesimi: le tabelle millesimali
+   - Spese: tutte le spese registrate, con il collegamento al documento
+   - Scadenze: assemblee, rate, manutenzioni
+   - Diario: ogni operazione fatta, con data e chi l'ha approvata
+
+3. Vuoi vedere un riparto o un rendiconto? Guarda in  "prospetti".
+   Un prospetto vale solo dopo l'approvazione dell'assemblea: finché nel
+   nome c'è "_bozza" è una proposta.
+
+COSA NON FARE
+
+- Non cancellare e non rinominare nulla in "archivio" o in "prospetti".
+- Non modificare registro-condominio.xlsx: se noti un errore, scrivi
+  all'amministratore.
+- Non caricare documenti che contengono dati di altre persone non
+  necessari (documenti d'identità, dati sanitari, ecc.).
+
+CHI TIENE IN ORDINE
+
+L'amministratore usa un assistente basato su intelligenza artificiale che
+propone l'archiviazione, i calcoli e le comunicazioni. Ogni operazione viene
+controllata e approvata da una persona prima di diventare effettiva, e viene
+annotata nel Diario. I dati personali riguardanti i pagamenti delle singole
+unità NON sono in questa cartella: sono custoditi solo dall'amministratore.
+
+Per qualsiasi domanda: scrivi all'amministratore.
