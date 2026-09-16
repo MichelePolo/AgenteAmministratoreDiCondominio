@@ -120,6 +120,28 @@ avvertimento che in mancanza si procederà al recupero del credito nelle forme d
 Scrivere all'utente che il testo va verificato da un legale prima dell'invio e proporre
 raccomandata A/R o PEC, non email ordinaria.
 
+## Nota al conduttore
+
+**Oggetto:** {Nome condominio} — quota spese {esercizio} a carico del conduttore — interno {Interno}
+
+```
+Gentile {Conduttore},
+
+per conto di {Intestatario}, proprietario dell'unità interno {Interno}, le trasmetto il
+prospetto delle spese condominiali {esercizio} con la parte che, in base all'art. 9 della
+legge 392/1978 e al contratto di locazione, è a carico del conduttore:
+
+  a carico del conduttore:  {A carico conduttore} €
+  a carico della proprietà: {A carico proprietà} €
+
+Il dettaglio spesa per spesa è nel foglio "Conduttori" del prospetto allegato.
+Le modalità di rimborso sono quelle concordate con il proprietario, in copia.
+
+Cordiali saluti,
+{Amministratore}
+Amministratore del {Nome condominio}
+```
+
 ## Verbale — struttura
 
 ```

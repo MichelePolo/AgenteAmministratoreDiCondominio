@@ -5,7 +5,7 @@ description: >
   prepara, l'umano approva), privacy, codice civile. Usare sempre se si parla di condominio,
   condomini, millesimi, spese comuni, assemblea, riparto, morosità.
 metadata:
-  version: "0.2.0"
+  version: "0.3.0"
 ---
 
 # Condominio — base comune
@@ -84,6 +84,7 @@ skill), che garantisce intestazioni, tipi, formati, ricalcolo dei totali e Diari
 R="${CLAUDE_SKILL_DIR}/scripts/registro.py"            # da un'altra skill: ${CLAUDE_SKILL_DIR}/../condominio-base/scripts/registro.py
 python3 "$R" info                                       # riepilogo: profilo, collaudo, esercizio, conteggi
 python3 "$R" verifica                                   # millesimi a 1000, anagrafica coerente, spese senza tabella, collaudo
+python3 "$R" schema                                     # aggiunge fogli/colonne/chiavi mancanti a un registro di versione precedente
 python3 "$R" read Anagrafica                            # stampa un foglio in JSON
 python3 "$R" read Spese --where Esercizio=2026          # filtro colonna=valore
 python3 "$R" read Scadenze --where "ID evento="         # valore vuoto = celle vuote
@@ -103,6 +104,14 @@ in `--dir`. `verifica` esce con codice 1 se ci sono problemi bloccanti e riscriv
 Il modello dati completo (fogli, colonne, tipi, vincoli) è in `references/modello-dati.md`:
 leggerlo prima di scrivere una riga. Le convenzioni di nome dei file sono in
 `references/convenzioni-file.md`. I riferimenti normativi in `references/normativa.md`.
+
+## Proprietario e conduttore
+
+I millesimi sono dell'unità immobiliare e il condomino è il proprietario: verso il condominio
+risponde lui per l'intera quota, anche se l'appartamento è affittato. L'inquilino non è condomino
+e non riceve solleciti. La divisione interna tra proprietario e inquilino dipende dal tipo di
+spesa (art. 9 L. 392/1978): è la colonna `Quota conduttore %` di ogni spesa, applicata alle unità
+con `Conduttore` in `Anagrafica`. Il prospetto la espone in due colonne e nel foglio `Conduttori`.
 
 ## Profilo utente
 

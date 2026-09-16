@@ -5,7 +5,7 @@ description: >
   Google Calendar senza duplicati. Usare per "scadenze", "cosa scade", "metti in calendario",
   "ricordami", "quando è l'assemblea", "rinnovo contratto".
 metadata:
-  version: "0.2.0"
+  version: "0.3.0"
 ---
 
 # Scadenze

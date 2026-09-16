@@ -5,7 +5,7 @@ description: >
   rate) e, dopo approvazione, aggiornamento del Dovuto. Usare per "riparto", "quanto deve
   ciascuno", "quote", "rendiconto", "rate", "bilancio".
 metadata:
-  version: "0.2.0"
+  version: "0.3.0"
 ---
 
 # Riparto
@@ -49,7 +49,10 @@ ogni unità totale e rate: usarlo per la presentazione, senza ricalcolare.
 ### 3. Presentare
 
 Mostrare in chat il riepilogo per unità (intestatario, totale, rate) e i totali per tabella,
-con un rigo di spiegazione del criterio. Con profilo `autogestione`, mostrare anche un esempio
+con un rigo di spiegazione del criterio. Se `unita_con_conduttore` > 0, mostrare per quelle unità
+anche "a carico proprietà" e "a carico conduttore" e dire che il foglio `Conduttori` del
+prospetto riporta la divisione spesa per spesa. Ricordare che verso il condominio il dovuto è
+tutto del proprietario: la parte dell'inquilino è un'indicazione per il loro rapporto interno. Con profilo `autogestione`, mostrare anche un esempio
 del calcolo per una riga ("ENEL 412,50 € × 250/1000 = 103,13 €") e ricordare che la somma delle
 quote coincide al centesimo con la spesa perché i centesimi residui vanno alle unità con il
 resto decimale maggiore. Indicare dove è stato salvato il prospetto.
@@ -75,6 +78,10 @@ Il prospetto è una **bozza** finché l'assemblea non lo approva: dirlo sempre.
   problema è nel registro e va risolto lì, con l'utente.
 - Spese `UNITA:<ID>` (a carico di uno solo) vanno mostrate separatamente nel riepilogo in chat,
   perché sono quelle su cui nascono le discussioni.
+- Proprietario e conduttore: la divisione usa `Quota conduttore %` di ogni spesa (vuoto = tutto al
+  proprietario) e vale solo per le unità con `Conduttore` in `Anagrafica`. I millesimi non si
+  dividono mai tra proprietario e inquilino. Prima del riparto, se ci sono unità affittate,
+  `registro.py verifica` segnala le spese senza percentuale: proporre di completarle.
 - Il riparto usa le tabelle così come sono: non applica di propria iniziativa l'art. 1124 (metà
   valore / metà altezza) né altre regole. Se l'utente chiede "è giusto usare la tabella B per
   questo?", rispondere con il riferimento normativo e invitare a verificare il regolamento.

@@ -11,6 +11,7 @@ Uso (dalla cartella del condominio, oppure con --dir <cartella>):
   registro.py diario "<Operazione>" [--dettaglio "..."] [--eseguito IA] [--approvato "Nome"]
   registro.py verifica                                  # millesimi a 1000, anagrafica, spese senza tabella…
                                                         # (riscrive anche TOTALE/Versato/Saldo dopo modifiche a mano)
+  registro.py schema                                    # aggiunge fogli/colonne/chiavi mancanti (aggiornamento registri)
 
 Opzioni comuni: --file registro-riservato.xlsx (default registro-condominio.xlsx), --dir <cartella>
 
@@ -29,7 +30,8 @@ from decimal import Decimal, InvalidOperation
 
 try:
     import openpyxl
-    from openpyxl.styles import Font
+    from openpyxl.styles import Font, PatternFill
+    from openpyxl.utils import get_column_letter
 except ImportError:  # pragma: no cover
     sys.exit("openpyxl non installato: pip install openpyxl")
 
@@ -43,6 +45,32 @@ COL_IMPORTI = {"importo", "quota", "dovuto", "versato", "saldo"}
 COL_DATE = {"data", "data pagamento", "ultimo sollecito", "data elaborazione"}
 COL_INT = {"esercizio", "piano", "id spesa", "livello", "livello sollecito", "id", "rata",
            "esercizio corrente", "numero unità"}
+COL_PCT = {"quota conduttore %"}
+HDR_FILL = PatternFill("solid", fgColor="DDE7F0")
+
+# Schema di riferimento: usato da `schema` per aggiungere ciò che manca a registri creati da versioni precedenti.
+SCHEMA = {
+    "registro-condominio.xlsx": {
+        "Condominio": ["Nome", "Indirizzo", "Codice fiscale", "Profilo", "Amministratore", "Email amministratore",
+                       "Modalità collaudo", "Email collaudo", "Esercizio corrente", "Inizio esercizio", "Fine esercizio",
+                       "Numero unità", "Tabelle millesimali", "Conto corrente", "Percorso registro riservato", "Ultima elaborazione"],
+        "Anagrafica": ["ID unità", "Interno", "Piano", "Intestatario", "Email", "Telefono", "Conduttore", "Email conduttore",
+                       "Dati catastali", "Note"],
+        "Millesimi": ["ID unità", "Intestatario", "Tab A", "Tab B", "Tab C"],
+        "Spese": ["ID", "Data", "Fornitore", "Descrizione", "Importo", "Tabella", "Quota conduttore %", "Esercizio", "File",
+                  "Pagata", "Data pagamento", "Note"],
+        "Riparti manuali": ["ID spesa", "ID unità", "Quota", "Note"],
+        "Scadenze": ["ID", "Data", "Ora", "Tipo", "Descrizione", "Ricorrenza", "ID evento", "Note"],
+        "Diario": ["Data-ora", "Operazione", "Dettaglio", "Eseguito da", "Approvato da"],
+        "Indice": ["Hash", "Nome originale", "Nome archivio", "Percorso", "Data elaborazione", "ID spesa"],
+    },
+    "registro-riservato.xlsx": {
+        "Situazione": ["ID unità", "Intestatario", "Esercizio", "Dovuto", "Versato", "Saldo", "Ultimo sollecito",
+                       "Livello sollecito", "Note"],
+        "Versamenti": ["ID", "Data", "ID unità", "Importo", "Esercizio", "Riferimento", "Rata", "Note"],
+        "Solleciti": ["ID", "Data", "ID unità", "Livello", "Inviato a", "Canale", "Esito", "Note"],
+    },
+}
 
 
 # ---------------------------------------------------------------- utilità
@@ -120,6 +148,9 @@ def _coerce(header, value):
     if h in COL_INT:
         d = _num(value)
         return int(d) if d is not None and d == d.to_integral_value() else str(value).strip()
+    if h in COL_PCT:
+        d = _num(value)
+        return _plain(d) if d is not None else str(value).strip()
     if h in COL_DATE:
         if isinstance(value, (dt.date, dt.datetime)):
             return value
@@ -378,7 +409,7 @@ def cmd_verifica(a):
     _refresh(wb)
     wb.save(a.path)  # riscrive i valori derivati: utile dopo modifiche fatte a mano nel foglio
     problemi, avvisi = [], []
-    ids_a = []
+    ids_a, conduttori = [], []
     if "Anagrafica" in wb.sheetnames:
         an = _rows(wb["Anagrafica"])
         ids_a = [str(r["ID unità"]).strip() for r in an if not _blank(r.get("ID unità"))]
@@ -390,6 +421,13 @@ def cmd_verifica(a):
         senza_email = [str(r["ID unità"]) for r in an if not _blank(r.get("ID unità")) and _blank(r.get("Email"))]
         if senza_email and ids_a:
             avvisi.append(f"Unità senza email (comunicazioni solo cartacee): {senza_email}")
+        conduttori = [str(r["ID unità"]) for r in an if not _blank(r.get("ID unità")) and not _blank(r.get("Conduttore"))]
+        if "Email conduttore" not in _headers(wb["Anagrafica"]):
+            avvisi.append("Anagrafica: manca la colonna 'Email conduttore' (eseguire `registro.py schema`)")
+        elif conduttori:
+            senza = [str(r["ID unità"]) for r in an if not _blank(r.get("Conduttore")) and _blank(r.get("Email conduttore"))]
+            if senza:
+                avvisi.append(f"Conduttori senza email: {senza}")
     if "Millesimi" in wb.sheetnames:
         ws = wb["Millesimi"]
         hdr = _headers(ws)
@@ -414,9 +452,20 @@ def cmd_verifica(a):
             if u not in ids_a:
                 problemi.append(f"Unità {u} in Millesimi ma non in Anagrafica")
     if "Spese" in wb.sheetnames:
-        senza_tab = [r.get("ID") for r in _rows(wb["Spese"]) if _blank(r.get("Tabella")) and not _blank(r.get("Importo"))]
+        sp = _rows(wb["Spese"])
+        senza_tab = [r.get("ID") for r in sp if _blank(r.get("Tabella")) and not _blank(r.get("Importo"))]
         if senza_tab:
             avvisi.append(f"Spese senza Tabella (il riparto le rifiuta): ID {senza_tab}")
+        if "Quota conduttore %" not in _headers(wb["Spese"]):
+            avvisi.append("Spese: manca la colonna 'Quota conduttore %' (eseguire `registro.py schema`)")
+        else:
+            fuori = [r.get("ID") for r in sp if (_num(r.get("Quota conduttore %")) is not None and not 0 <= _num(r.get("Quota conduttore %")) <= 100)]
+            if fuori:
+                problemi.append(f"Spese con 'Quota conduttore %' fuori da 0-100 (il riparto le rifiuta): ID {fuori}")
+            if conduttori:
+                senza_pct = [r.get("ID") for r in sp if not _blank(r.get("Importo")) and _blank(r.get("Quota conduttore %"))]
+                if senza_pct:
+                    avvisi.append(f"Spese senza 'Quota conduttore %' (nel prospetto andranno tutte al proprietario): ID {senza_pct}")
     if "Condominio" in wb.sheetnames:
         kv = _kv(wb["Condominio"])
         for k in ("Nome", "Amministratore", "Email amministratore"):
@@ -431,6 +480,50 @@ def cmd_verifica(a):
     sys.exit(0 if not problemi else 1)
 
 
+def cmd_schema(a):
+    wb = _wb(a.path)
+    schema = SCHEMA.get(os.path.basename(a.path))
+    if not schema:
+        sys.exit(f"Nessuno schema noto per {os.path.basename(a.path)} (attesi: {list(SCHEMA)})")
+    aggiunte = []
+    for sheet, cols in schema.items():
+        if sheet in KV_SHEETS:
+            if sheet not in wb.sheetnames:
+                continue
+            ws = wb[sheet]
+            presenti = {r[0].value for r in ws.iter_rows(min_row=1, max_col=1)}
+            for k in cols:
+                if k not in presenti:
+                    ws.append([k, None])
+                    ws.cell(ws.max_row, 1).font = Font(name=FONT, bold=True)
+                    ws.cell(ws.max_row, 1).fill = HDR_FILL
+                    aggiunte.append(f"{sheet}: chiave '{k}'")
+            continue
+        if sheet not in wb.sheetnames:
+            ws = wb.create_sheet(sheet)
+            ws.append(cols)
+            ws.freeze_panes = "A2"
+            for c in ws[1]:
+                c.font = Font(name=FONT, bold=True); c.fill = HDR_FILL
+            aggiunte.append(f"foglio '{sheet}'")
+            continue
+        ws = wb[sheet]
+        hdr = _headers(ws)
+        for k in cols:
+            if k not in hdr:
+                col = len(hdr) + 1
+                cell = ws.cell(1, col)
+                cell.value = k; cell.font = Font(name=FONT, bold=True); cell.fill = HDR_FILL
+                ws.column_dimensions[get_column_letter(col)].width = max(14, len(k) + 2)
+                hdr.append(k)
+                aggiunte.append(f"{sheet}: colonna '{k}' (in coda)")
+    if aggiunte:
+        _refresh(wb)
+        _touch(wb)
+        wb.save(a.path)
+    _out({"ok": True, "aggiunte": aggiunte})
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--file", default=DEFAULT_FILE)
@@ -443,10 +536,11 @@ def main():
     st = sub.add_parser("set"); st.add_argument("sheet"); st.add_argument("key"); st.add_argument("value")
     d = sub.add_parser("diario"); d.add_argument("operazione"); d.add_argument("--dettaglio"); d.add_argument("--eseguito", default="IA"); d.add_argument("--approvato")
     sub.add_parser("verifica")
+    sub.add_parser("schema")
     a = p.parse_args()
     a.path = os.path.join(a.dir, a.file)
     {"info": cmd_info, "read": cmd_read, "append": cmd_append, "update": cmd_update,
-     "set": cmd_set, "diario": cmd_diario, "verifica": cmd_verifica}[a.cmd](a)
+     "set": cmd_set, "diario": cmd_diario, "verifica": cmd_verifica, "schema": cmd_schema}[a.cmd](a)
 
 
 if __name__ == "__main__":

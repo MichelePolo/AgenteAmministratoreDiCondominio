@@ -22,7 +22,8 @@ COSA PUOI FARE
 
 3. Vuoi vedere un riparto o un rendiconto? Guarda in  "prospetti".
    Un prospetto vale solo dopo l'approvazione dell'assemblea: finché nel
-   nome c'è "_bozza" è una proposta.
+   nome c'è "_bozza" è una proposta. Se sei inquilino, la parte che ti
+   spetta per contratto è nel foglio "Conduttori" del prospetto.
 
 COSA NON FARE
 

@@ -47,6 +47,23 @@ Le norme possono cambiare: se l'utente chiede "è ancora così?", verificare con
   innovazioni, nomina/revoca amministratore, lavori rilevanti (art. 1120, 1136 co. 4).
 - **Art. 1137 c.c.** — Impugnazione delle delibere entro 30 giorni.
 
+## Proprietario e conduttore
+
+- **Art. 9 L. 392/1978** — Salvo patto contrario, sono a carico del conduttore le spese per
+  pulizia, funzionamento e manutenzione ordinaria dell'ascensore, fornitura di acqua, energia
+  elettrica, riscaldamento e condizionamento, spurgo di pozzi neri e latrine, e gli altri servizi
+  comuni; il portierato al 90%. Le spese straordinarie restano al proprietario. La tabella oneri
+  accessori allegata all'accordo Confedilizia–sindacati inquilini (D.M. 16 gennaio 2017) dettaglia
+  voce per voce. Nel plugin: colonna `Quota conduttore %` di ogni spesa.
+- **Art. 10 L. 392/1978** — Il conduttore vota al posto del proprietario nelle delibere su spese e
+  gestione di riscaldamento e condizionamento; può intervenire, senza voto, su quelle relative agli
+  altri servizi. Non è condomino: il debitore verso il condominio è sempre il proprietario, che
+  si rivale sull'inquilino.
+- **Art. 67 disp. att. c.c.** — Comproprietà: un solo rappresentante in assemblea per l'unità.
+  Usufrutto: l'usufruttuario vota e paga per l'ordinaria amministrazione e il godimento, il nudo
+  proprietario per straordinaria e innovazioni; rispondono in solido verso il condominio. Anche in
+  questi casi i millesimi restano dell'unità.
+
 ## Morosità
 
 - **Art. 63 disp. att. c.c.** — L'amministratore può ottenere decreto ingiuntivo immediatamente

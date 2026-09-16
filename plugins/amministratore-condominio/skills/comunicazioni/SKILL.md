@@ -5,7 +5,7 @@ description: >
   solleciti di pagamento; bozza di verbale. Usare per "convoca l'assemblea", "manda un
   avviso", "sollecita", "invia il riparto", "email ai condomini".
 metadata:
-  version: "0.2.0"
+  version: "0.3.0"
 ---
 
 # Comunicazioni
@@ -84,6 +84,14 @@ e `append Solleciti`. Quando l'utente comunica un bonifico ricevuto: `append Ver
 l'amministratore deve attivarsi per il recupero (art. 1129 co. 9 c.c.) e che conviene parlare
 con la persona prima del secondo sollecito.
 
+### Nota al conduttore (solo su richiesta esplicita)
+
+Per un'unità con `Conduttore` e `Email conduttore` in `Anagrafica`, dopo un riparto: email
+informativa all'inquilino con la sua parte (dal foglio `Conduttori` del prospetto o dal JSON di
+`riparto.py`), Cc al proprietario, modello "Nota al conduttore" in `references/modelli.md`.
+Non è una richiesta di pagamento al condominio: l'inquilino paga al proprietario, salvo diverso
+accordo tra loro. Mai un sollecito al conduttore: il debitore verso il condominio è il proprietario.
+
 ### Bozza di verbale
 
 Da appunti dell'utente o da registrazione trascritta: intestazione (condominio, data, ora,
@@ -96,6 +104,7 @@ esito della votazione (favorevoli/contrari/astenuti e millesimi), chiusura. Salv
 ## Cosa non fare
 
 - Non inviare a destinatari non presenti in `Anagrafica`.
+- Non inviare solleciti al conduttore e non contare le sue quote come dovute al condominio.
 - Non usare Cc per liste di condomini.
 - Non allegare `registro-riservato.xlsx` o estratti per unità a comunicazioni collettive.
 - Non minacciare azioni legali in un testo non richiesto esplicitamente come diffida.

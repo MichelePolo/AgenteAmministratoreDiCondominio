@@ -5,7 +5,7 @@ description: >
   classificazione, li sposta in archivio/ e registra le spese. Usare per "archivia",
   "sistema i documenti", "cosa hanno caricato", "registra questa fattura".
 metadata:
-  version: "0.2.0"
+  version: "0.3.0"
 ---
 
 # Archivio
@@ -56,6 +56,17 @@ Determinare:
 - se in dubbio → `A` con nota "da confermare"
 Le tabelle disponibili sono nella chiave `Tabelle millesimali` del foglio `Condominio`.
 
+**Quota conduttore %** — per ogni spesa, la percentuale che all'interno di un'unità affittata
+spetta all'inquilino (art. 9 L. 392/1978 e tabella oneri accessori; dettagli in
+`../condominio-base/references/normativa.md`). Proporla sempre, anche se oggi nessuna unità è
+affittata:
+- pulizie, luce scale, acqua, riscaldamento e condizionamento, spurghi, manutenzione **ordinaria**
+  ascensore e impianti, piccole riparazioni parti comuni → `100`
+- portierato → `90`
+- manutenzione **straordinaria** (facciata, tetto, sostituzione caldaia o ascensore), compenso
+  amministratore, assicurazione fabbricato, imposte → `0`
+- se in dubbio → `0` con nota "da confermare" (il proprietario resta comunque il debitore)
+
 Un preventivo, un verbale, un contratto non generano una spesa. Un contratto genera
 tipicamente una **scadenza** (rinnovo, verifica periodica): segnalarla per la skill `scadenze`.
 
@@ -66,7 +77,7 @@ registrare (importo, tabella) o "nessuna", duplicati rilevati. Esempio:
 
 ```
 1. bolletta enel.pdf → archivio/2026/fatture/2026-03-14_fattura_enel_luce-scale_412.50.pdf
-   spesa: 412,50 € · tabella B · esercizio 2026
+   spesa: 412,50 € · tabella B · conduttore 100% · esercizio 2026
 2. IMG_2231.jpg → archivio/2026/altro/2026-05-03_foto_portone_danno-cerniera.jpg
    spesa: nessuna
 3. enel marzo (1).pdf → DUPLICATO di archivio/2026/fatture/2026-03-14_fattura_enel_… → altro/duplicati/
@@ -82,7 +93,7 @@ Per ogni file confermato, nell'ordine:
 1. `mkdir -p` della cartella di destinazione, `mv` del file. Se esiste già un file con lo stesso
    nome, aggiungere suffisso `_2` e annotarlo.
 2. Se genera una spesa: `registro.py append Spese '{...}'` con `File` = percorso relativo di
-   destinazione. Conservare l'`ID` restituito.
+   destinazione e `Quota conduttore %` valorizzata. Conservare l'`ID` restituito.
 3. `registro.py append Indice '{"Hash":..., "Nome originale":..., "Nome archivio":..., "Percorso":..., "Data elaborazione":"<oggi>", "ID spesa": <id o vuoto>}'`.
 4. Duplicati: `mv` in `archivio/<anno>/altro/duplicati/` mantenendo il nome originale; riga in
    `Indice` con `Nome archivio` = `DUPLICATO di <percorso copia>`.

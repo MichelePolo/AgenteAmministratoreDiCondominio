@@ -13,6 +13,9 @@ Regole:
 - UNITA:<ID>: tutto a quell'unità.
 - MANUALE: quote lette dal foglio "Riparti manuali" (devono sommare all'importo).
 - Si rifiuta di partire se una tabella usata non somma a 1000 (±0,01) o se una spesa non ha Tabella.
+- Proprietario/conduttore: per le unità con `Conduttore` in Anagrafica, la quota di ogni spesa è divisa
+  secondo `Quota conduttore %` della spesa (vuoto = 0 = tutto al proprietario). Verso il condominio il
+  dovuto resta del proprietario; la parte del conduttore è informativa (foglio "Conduttori").
 
 Produce un xlsx in prospetti/ (nome con suffisso _bozza; non sovrascrive mai un file esistente) con
 fogli Riepilogo, Dettaglio, Millesimi usati — solo valori, nessuna formula — e stampa un riepilogo JSON.
@@ -23,7 +26,7 @@ import json
 import os
 import re
 import sys
-from decimal import Decimal, ROUND_DOWN
+from decimal import Decimal, ROUND_DOWN, ROUND_HALF_UP
 
 try:
     import openpyxl
@@ -113,11 +116,11 @@ def nome_libero(path):
     return cand
 
 
-def fmt_row(ws, r, bold=False, euro_from=None):
+def fmt_row(ws, r, bold=False, euro_from=None, skip=()):
     for c in range(1, ws.max_column + 1):
         cell = ws.cell(r, c)
         cell.font = Font(name=FONT, bold=bold)
-        if euro_from and c >= euro_from and isinstance(cell.value, (int, float)):
+        if euro_from and c >= euro_from and c not in skip and isinstance(cell.value, (int, float)):
             cell.number_format = FMT_EURO
 
 
@@ -136,6 +139,7 @@ def calcola(a):
     unita = [str(r["ID unità"]).strip() for r in mill_rows]
     if not unita:
         sys.exit("Nessuna unità nel foglio Millesimi: completare il setup")
+    conduttori = {u: str(anag[u]["Conduttore"]).strip() for u in unita if u in anag and not blank(anag[u].get("Conduttore"))}
 
     errori = []
     for t, pesi in mill.items():
@@ -170,7 +174,7 @@ def calcola(a):
         sys.exit("Nessuna spesa selezionata")
 
     # calcolo
-    dettaglio = []  # (spesa, chiave tabella normalizzata, {unità: quota})
+    dettaglio = []  # (spesa, chiave tabella normalizzata, {unità: quota}, % conduttore, {unità: quota conduttore})
     for s in spese:
         importo = D(s["Importo"]).quantize(CENT)
         raw = str(s.get("Tabella") or "").strip()
@@ -201,19 +205,25 @@ def calcola(a):
                 quote = ripartisci(importo, mill[key])
             except ValueError as e:
                 errori.append(f"Spesa {sid}: {e}"); continue
-        dettaglio.append((s, chiave, quote))
+        pct = D(s.get("Quota conduttore %")) if not blank(s.get("Quota conduttore %")) else Decimal(0)
+        if not 0 <= pct <= 100:
+            errori.append(f"Spesa {sid}: 'Quota conduttore %' = {pct} fuori da 0-100"); continue
+        cond_q = {u: ((quote[u] * pct / 100).quantize(CENT, rounding=ROUND_HALF_UP) if u in conduttori else Decimal(0)) for u in unita}
+        dettaglio.append((s, chiave, quote, pct, cond_q))
     if errori:
         print(json.dumps({"ok": False, "errori": errori}, ensure_ascii=False, indent=2))
         sys.exit(2)
 
-    totali = {u: sum(q[u] for _, _, q in dettaglio) for u in unita}
+    totali = {u: sum(q[u] for _, _, q, _, _ in dettaglio) for u in unita}
+    tot_cond = {u: sum(cq[u] for _, _, _, _, cq in dettaglio) for u in unita}
+    tot_prop = {u: totali[u] - tot_cond[u] for u in unita}
     per_tab = {}
-    for _, chiave, q in dettaglio:
+    for _, chiave, q, _, _ in dettaglio:
         for u in unita:
             per_tab.setdefault(chiave, {}).setdefault(u, Decimal(0))
             per_tab[chiave][u] += q[u]
     per_tab = dict(sorted(per_tab.items()))
-    totale = sum(D(s["Importo"]) for s, _, _ in dettaglio).quantize(CENT)
+    totale = sum(D(s["Importo"]) for s, _, _, _, _ in dettaglio).quantize(CENT)
     assert sum(totali.values()) == totale
     rate = {u: ripartisci(totali[u], {i: Decimal(1) for i in range(a.rate)}) for u in unita} if a.rate else {}
 
@@ -231,17 +241,22 @@ def calcola(a):
     ws = xw.active; ws.title = "Riepilogo"
     ws["A1"] = f"{cond.get('Nome', '')} — {titolo}"; ws["A1"].font = Font(name=FONT, bold=True, size=13)
     ws["A2"] = f"Generato il {oggi} · BOZZA: valida solo dopo approvazione dell'assemblea"; ws["A2"].font = Font(name=FONT, italic=True)
-    hdr = ["ID unità", "Interno", "Intestatario"] + [f"Quota {t}" for t in per_tab] + ["Totale dovuto"] + [f"Rata {i + 1}" for i in range(a.rate)]
+    extra = ["A carico proprietà", "A carico conduttore"] if conduttori else []
+    hdr = ["ID unità", "Interno", "Intestatario"] + [f"Quota {t}" for t in per_tab] + ["Totale dovuto"] + extra + [f"Rata {i + 1}" for i in range(a.rate)]
     ws.append([]); ws.append(hdr)
     for c in ws[4]:
         c.font = Font(name=FONT, bold=True); c.fill = HDR_FILL
     for u in unita:
         row = [u, anag.get(u, {}).get("Interno", ""), anag.get(u, {}).get("Intestatario", "")]
         row += [float(per_tab[t][u]) for t in per_tab] + [float(totali[u])]
+        if conduttori:
+            row += [float(tot_prop[u]), float(tot_cond[u])]
         row += [float(rate[u][i]) for i in range(a.rate)]
         ws.append(row)
         fmt_row(ws, ws.max_row, euro_from=4)
     tot_row = ["TOTALE", "", ""] + [float(sum(v.values())) for v in per_tab.values()] + [float(totale)]
+    if conduttori:
+        tot_row += [float(sum(tot_prop.values())), float(sum(tot_cond.values()))]
     tot_row += [float(sum(rate[u][i] for u in unita)) for i in range(a.rate)]
     ws.append(tot_row)
     fmt_row(ws, ws.max_row, bold=True, euro_from=4)
@@ -254,7 +269,7 @@ def calcola(a):
     wd.append(["ID spesa", "Data", "Fornitore", "Descrizione", "Importo", "Tabella"] + unita)
     for c in wd[1]:
         c.font = Font(name=FONT, bold=True); c.fill = HDR_FILL
-    for s, chiave, q in dettaglio:
+    for s, chiave, q, _, _ in dettaglio:
         wd.append([int(D(s["ID"])), as_date(s.get("Data")), s.get("Fornitore"), s.get("Descrizione"), float(D(s["Importo"])), chiave] + [float(q[u]) for u in unita])
         fmt_row(wd, wd.max_row, euro_from=5)
         wd.cell(wd.max_row, 2).number_format = "yyyy-mm-dd"
@@ -262,6 +277,29 @@ def calcola(a):
     fmt_row(wd, wd.max_row, bold=True, euro_from=5)
     wd.column_dimensions["D"].width = 36; wd.column_dimensions["C"].width = 22
     wd.freeze_panes = "G2"
+
+    if conduttori:  # riparto interno proprietario/conduttore, una sezione per unità affittata
+        wc = xw.create_sheet("Conduttori")
+        wc.append(["ID unità", "Interno", "Intestatario", "Conduttore", "ID spesa", "Data", "Descrizione", "Tabella",
+                   "Quota unità", "% conduttore", "A carico conduttore", "A carico proprietà"])
+        for c in wc[1]:
+            c.font = Font(name=FONT, bold=True); c.fill = HDR_FILL
+        for u in unita:
+            if u not in conduttori:
+                continue
+            interno = anag[u].get("Interno", ""); intest = anag[u].get("Intestatario", "")
+            for s, chiave, q, pct, cq in dettaglio:
+                if q[u] == 0:
+                    continue
+                wc.append([u, interno, intest, conduttori[u], int(D(s["ID"])), as_date(s.get("Data")), s.get("Descrizione"), chiave,
+                           float(q[u]), float(pct), float(cq[u]), float(q[u] - cq[u])])
+                fmt_row(wc, wc.max_row, euro_from=9, skip=(10,))
+                wc.cell(wc.max_row, 6).number_format = "yyyy-mm-dd"
+            wc.append([u, interno, intest, conduttori[u], "", None, "TOTALE", "", float(totali[u]), "", float(tot_cond[u]), float(tot_prop[u])])
+            fmt_row(wc, wc.max_row, bold=True, euro_from=9, skip=(10,))
+        for col, w in {"C": 26, "D": 26, "G": 36, "K": 20, "L": 20}.items():
+            wc.column_dimensions[col].width = w
+        wc.freeze_panes = "E2"
 
     wm = xw.create_sheet("Millesimi usati")
     wm.append(["ID unità"] + tabelle)
@@ -276,7 +314,10 @@ def calcola(a):
         "ok": True, "titolo": titolo, "esercizio": esercizio, "prospetto": out,
         "spese": len(dettaglio), "totale": float(totale), "rate": a.rate,
         "per_unita": {u: {"interno": anag.get(u, {}).get("Interno"), "intestatario": anag.get(u, {}).get("Intestatario"),
-                          "totale": float(totali[u]), "rate": [float(rate[u][i]) for i in range(a.rate)]} for u in unita},
+                          "totale": float(totali[u]), "rate": [float(rate[u][i]) for i in range(a.rate)],
+                          "conduttore": conduttori.get(u),
+                          "a_carico_proprieta": float(tot_prop[u]), "a_carico_conduttore": float(tot_cond[u])} for u in unita},
+        "unita_con_conduttore": len(conduttori),
         "per_tabella": {t: float(sum(v.values())) for t, v in per_tab.items()},
         "a_carico_singola_unita": {t: float(sum(v.values())) for t, v in per_tab.items() if t.startswith("UNITA:")},
     }, ensure_ascii=False, indent=2, default=str))

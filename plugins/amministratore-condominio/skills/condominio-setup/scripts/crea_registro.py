@@ -4,7 +4,7 @@ crea_registro.py — crea la struttura della cartella condominio e i due registr
 
   crea_registro.py --dir "<cartella condominio>" [--nome "Condominio X"] [--esercizio 2026] [--esempio]
 
---esempio inserisce dati dimostrativi (4 unità, 3 spese, 2 versamenti) per provare subito un riparto.
+--esempio inserisce dati dimostrativi (4 unità di cui una affittata, 3 spese, 2 versamenti) per provare subito un riparto.
 Senza --esempio, Anagrafica e Millesimi nascono vuoti: le unità vere si inseriscono con
 registro.py append (o a mano nel foglio). Non sovrascrive registri esistenti.
 
@@ -96,24 +96,28 @@ def crea_condominio(path, nome, esercizio, esempio):
     ws.column_dimensions["A"].width = 26; ws.column_dimensions["B"].width = 42; ws.column_dimensions["C"].width = 60
     ws.freeze_panes = "B1"
 
-    an_h = ["ID unità", "Interno", "Piano", "Intestatario", "Email", "Telefono", "Conduttore", "Dati catastali", "Note"]
-    an = _sheet(wb, "Anagrafica", an_h, {"Intestatario": 28, "Email": 30, "Dati catastali": 24, "Note": 30})
+    an_h = ["ID unità", "Interno", "Piano", "Intestatario", "Email", "Telefono", "Conduttore", "Email conduttore", "Dati catastali", "Note"]
+    an = _sheet(wb, "Anagrafica", an_h, {"Intestatario": 28, "Email": 30, "Conduttore": 24, "Email conduttore": 30, "Dati catastali": 24, "Note": 30})
     mi_h = ["ID unità", "Intestatario", "Tab A", "Tab B", "Tab C"]
     mi = _sheet(wb, "Millesimi", mi_h, {"Intestatario": 28})
-    sp_h = ["ID", "Data", "Fornitore", "Descrizione", "Importo", "Tabella", "Esercizio", "File", "Pagata", "Data pagamento", "Note"]
-    sp = _sheet(wb, "Spese", sp_h, {"Descrizione": 34, "File": 60, "Fornitore": 22, "Note": 30})
+    sp_h = ["ID", "Data", "Fornitore", "Descrizione", "Importo", "Tabella", "Quota conduttore %", "Esercizio", "File", "Pagata", "Data pagamento", "Note"]
+    sp = _sheet(wb, "Spese", sp_h, {"Descrizione": 34, "File": 60, "Fornitore": 22, "Quota conduttore %": 20, "Note": 30})
+    sp["G1"].comment = Comment("Percentuale della quota di ogni unità che, all'interno dell'unità, spetta al conduttore "
+                               "(art. 9 L. 392/1978): 100 per pulizie, luce scale, acqua, riscaldamento, ordinaria ascensore; "
+                               "90 portierato; 0 per straordinaria, amministratore, assicurazione. Vuoto = 0. "
+                               "Conta solo per le unità con Conduttore in Anagrafica.", "amministratore-condominio")
     _sheet(wb, "Riparti manuali", ["ID spesa", "ID unità", "Quota", "Note"])
     _sheet(wb, "Scadenze", ["ID", "Data", "Ora", "Tipo", "Descrizione", "Ricorrenza", "ID evento", "Note"], {"Descrizione": 40, "ID evento": 30, "Note": 30})
     di_h = ["Data-ora", "Operazione", "Dettaglio", "Eseguito da", "Approvato da"]
     di = _sheet(wb, "Diario", di_h, {"Data-ora": 20, "Operazione": 36, "Dettaglio": 70})
     _sheet(wb, "Indice", ["Hash", "Nome originale", "Nome archivio", "Percorso", "Data elaborazione", "ID spesa"], {"Hash": 20, "Nome originale": 40, "Nome archivio": 50, "Percorso": 50})
 
-    unita = [("U01", "1", 0, "Mario Rossi", "mario.rossi@example.it", 300, 100, 0),
-             ("U02", "2", 1, "Anna Bianchi", "anna.bianchi@example.it", 250, 250, 300),
-             ("U03", "3", 2, "Luca Verdi", "luca.verdi@example.it", 250, 300, 350),
-             ("U04", "4", 2, "Giulia Neri", "giulia.neri@example.it", 200, 350, 350)] if esempio else []
+    unita = [("U01", "1", 0, "Mario Rossi", "mario.rossi@example.it", 300, 100, 0, "", ""),
+             ("U02", "2", 1, "Anna Bianchi", "anna.bianchi@example.it", 250, 250, 300, "Paolo Gialli", "paolo.gialli@example.it"),
+             ("U03", "3", 2, "Luca Verdi", "luca.verdi@example.it", 250, 300, 350, "", ""),
+             ("U04", "4", 2, "Giulia Neri", "giulia.neri@example.it", 200, 350, 350, "", "")] if esempio else []
     for u in unita:
-        _row(an, an_h, [u[0], u[1], u[2], u[3], u[4], "", "", "", ""])
+        _row(an, an_h, [u[0], u[1], u[2], u[3], u[4], "", u[8], u[9], "", ""])
         _row(mi, mi_h, [u[0], u[3], u[5], u[6], u[7]])
     tot = [sum(u[i] for u in unita) for i in (5, 6, 7)]
     _row(mi, mi_h, ["TOTALE", "ogni colonna Tab deve fare 1000", *tot], bold=True)
@@ -121,9 +125,9 @@ def crea_condominio(path, nome, esercizio, esempio):
                                "Altre tabelle (Tab D…) si aggiungono in coda con la stessa regola. "
                                "La riga TOTALE è ricalcolata dagli script.", "amministratore-condominio")
     if esempio:
-        _row(sp, sp_h, [1, dt.date(esercizio, 3, 14), "ENEL", "Energia elettrica scale (esempio)", 412.50, "B", esercizio, f"archivio/{esercizio}/fatture/{esercizio}-03-14_fattura_enel_luce-scale_412.50.pdf", "NO", None, "riga di esempio"])
-        _row(sp, sp_h, [2, dt.date(esercizio, 2, 2), "Otis", "Manutenzione ascensore 1° sem. (esempio)", 780.00, "C", esercizio, f"archivio/{esercizio}/contratti/{esercizio}-01-10_contratto_otis_manutenzione-ascensore.pdf", "SI", dt.date(esercizio, 2, 20), "riga di esempio"])
-        _row(sp, sp_h, [3, dt.date(esercizio, 4, 5), "Studio Tecnico Bruni", "Polizza globale fabbricato (esempio)", 1250.00, "A", esercizio, "", "NO", None, "riga di esempio"])
+        _row(sp, sp_h, [1, dt.date(esercizio, 3, 14), "ENEL", "Energia elettrica scale (esempio)", 412.50, "B", 100, esercizio, f"archivio/{esercizio}/fatture/{esercizio}-03-14_fattura_enel_luce-scale_412.50.pdf", "NO", None, "riga di esempio"])
+        _row(sp, sp_h, [2, dt.date(esercizio, 2, 2), "Otis", "Manutenzione ordinaria ascensore 1° sem. (esempio)", 780.00, "C", 100, esercizio, f"archivio/{esercizio}/contratti/{esercizio}-01-10_contratto_otis_manutenzione-ascensore.pdf", "SI", dt.date(esercizio, 2, 20), "riga di esempio"])
+        _row(sp, sp_h, [3, dt.date(esercizio, 4, 5), "Studio Tecnico Bruni", "Polizza globale fabbricato (esempio)", 1250.00, "A", 0, esercizio, "", "NO", None, "riga di esempio"])
     _row(di, di_h, [dt.datetime.now().isoformat(timespec="seconds"), "Creazione registro",
                     f"Registro creato da condominio-setup{' con dati di esempio' if esempio else ''}", "IA", ""])
     wb.save(path)

@@ -52,7 +52,8 @@ Corrisponde all'anagrafe condominiale dell'art. 1130 n. 6 c.c.
 | Intestatario | testo | proprietario (o comproprietari separati da `;`) |
 | Email | email | destinatario delle comunicazioni; vuoto = solo cartaceo |
 | Telefono | testo | |
-| Conduttore | testo | inquilino, se presente |
+| Conduttore | testo | inquilino, se presente: attiva il riparto proprietario/conduttore nel prospetto |
+| Email conduttore | email | per la nota informativa al conduttore (mai solleciti) |
 | Dati catastali | testo | foglio/particella/subalterno |
 | Note | testo | |
 
@@ -84,6 +85,7 @@ tabella per un'unità mette 0, non vuoto. Le unità vanno inserite sopra la riga
 | Descrizione | testo | breve, in italiano |
 | Importo | numero (2 dec.) | lordo, come da documento; negativo per note di credito e rimborsi |
 | Tabella | `A`,`B`,`C`… \| `UNITA:U03` \| `MANUALE` | criterio di riparto, **obbligatorio** per il riparto; `UNITA:` = a carico di una sola unità; `MANUALE` = riparto indicato nel foglio `Riparti manuali` |
+| Quota conduttore % | numero 0–100 | parte della quota che, dentro un'unità affittata, spetta all'inquilino (art. 9 L. 392/1978); vuoto = 0 |
 | Esercizio | anno | |
 | File | percorso relativo | dentro `archivio/` |
 | Pagata | `SI` \| `NO` | |
@@ -168,5 +170,20 @@ Traccia i file già elaborati da `archivio` (idempotenza).
 ## Prospetti (`prospetti/`)
 
 Generati da `riparto.py`: `<data>_riparto_<titolo>_bozza.xlsx`, fogli `Riepilogo` (una riga per
-unità: quote per tabella, totale, rate), `Dettaglio` (una riga per spesa) e `Millesimi usati`.
+unità: quote per tabella, totale, eventuali colonne "A carico proprietà" e "A carico conduttore",
+rate), `Dettaglio` (una riga per spesa), `Conduttori` (solo se ci sono unità affittate: per ogni
+unità e spesa, quota, percentuale, parte del conduttore e della proprietà) e `Millesimi usati`.
 Solo valori. Mai sovrascritti (`_2`, `_3`…). Dopo l'approvazione dell'assemblea si toglie `_bozza`.
+
+## Riparto proprietario / conduttore
+
+I millesimi non si dividono tra proprietario e inquilino. Per ogni spesa, la quota dell'unità è
+`importo × millesimi / 1000`; se l'unità ha un `Conduttore`, la parte dell'inquilino è
+`quota × Quota conduttore % / 100` (arrotondata al centesimo) e il resto è della proprietà.
+Il `Dovuto` in `Situazione` resta l'intera quota, a carico del proprietario.
+
+## Aggiornamento dello schema
+
+`registro.py schema` (anche con `--file registro-riservato.xlsx`) aggiunge in coda le colonne,
+i fogli e le chiavi mancanti rispetto a questo modello, senza toccare i dati. Va eseguito quando
+un registro creato da una versione precedente del plugin non ha una colonna prevista qui.

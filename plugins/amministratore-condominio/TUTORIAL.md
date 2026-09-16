@@ -32,6 +32,7 @@ Alla fine la cartella contiene `da analizzare/`, `archivio/`, `prospetti/`, i du
 Senza dati di esempio, `Anagrafica` e `Millesimi` sono vuoti. Puoi dettarli in chat:
 
 > interno 1, piano terra, Mario Rossi, mario.rossi@…, millesimi A 300, B 100, C 0
+> interno 2, primo piano, Anna Bianchi, anna@…, affittato a Paolo Gialli, paolo@…, millesimi A 250, B 250, C 300
 
 oppure fotografare la tabella millesimale e chiedere di leggerla (confermerai i numeri riga per
 riga), oppure compilare i fogli a mano con Excel, LibreOffice o Google Sheets (lasciando il
@@ -77,6 +78,13 @@ Il prospetto finisce in `prospetti/` con il suffisso `_bozza`. Apri il foglio `R
 riga per unità, le quote per tabella, il totale e le rate. Nel foglio `Dettaglio` c'è ogni spesa
 ripartita. La somma delle quote coincide al centesimo con il totale delle spese.
 
+Se ci sono appartamenti affittati, il `Riepilogo` ha anche le colonne "A carico proprietà" e
+"A carico conduttore", e il foglio `Conduttori` mostra spesa per spesa la parte dell'inquilino,
+secondo la percentuale che l'assistente propone per ogni spesa quando la archivia (100% per
+servizi come luce scale e pulizie, 0% per lavori straordinari). Il proprietario resta il debitore
+verso il condominio; con "manda la nota al conduttore dell'interno 2" l'inquilino riceve la sua
+parte per informazione.
+
 Il prospetto è una bozza finché l'assemblea non lo approva; quando succede, dillo ("l'assemblea
 ha approvato") e l'assistente toglie il suffisso e aggiorna il dovuto di ogni unità.
 
@@ -115,6 +123,8 @@ Il foglio `Scadenze` e Google Calendar restano allineati; rilanciare il comando 
 - *"openpyxl non installato"*: scrivi "installa openpyxl" e riprova.
 - *"Tab B somma a 990"*: correggi i millesimi nel registro; il riparto non parte finché non quadra.
 - *"Spesa 7: manca la Tabella"*: assegna la tabella a quella spesa ("la spesa 7 è tabella B").
+- *"Manca la colonna Email conduttore"*: il registro è di una versione precedente. Scrivi
+  "aggiorna lo schema del registro": le colonne nuove vengono aggiunte senza toccare i dati.
 - *Le email non partono / il calendario non si aggiorna*: il connettore non è collegato. Vedi il
   passo 0 e `skills/condominio-setup/references/connettori.md`.
 - *Un condomino vede totali vuoti dal telefono*: il file è stato salvato con formule da un altro

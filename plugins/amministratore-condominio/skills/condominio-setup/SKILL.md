@@ -5,7 +5,7 @@ description: >
   anagrafica e tabelle millesimali. Usare per "configura il condominio", "iniziamo",
   "nuovo condominio", "setup", o se manca registro-condominio.xlsx.
 metadata:
-  version: "0.2.0"
+  version: "0.3.0"
 ---
 
 # Setup del condominio
@@ -52,7 +52,9 @@ vedranno nulla finché non viene spostata in Drive. Non bloccarsi.
 python3 "${CLAUDE_SKILL_DIR}/scripts/crea_registro.py" --dir "<cartella di lavoro>" --nome "<Nome>" --esercizio <anno> [--esempio]
 ```
 
-Lo script non sovrascrive registri esistenti. Poi impostare i valori raccolti:
+Lo script non sovrascrive registri esistenti. Se i registri esistono ma sono di una versione
+precedente del plugin, `registro.py schema` (e `--file registro-riservato.xlsx schema`) aggiunge
+fogli e colonne mancanti senza toccare i dati. Poi impostare i valori raccolti:
 
 ```bash
 R="${CLAUDE_SKILL_DIR}/../condominio-base/scripts/registro.py"
@@ -82,6 +84,10 @@ Tre strade, lasciare scegliere:
   confermare i numeri riga per riga: un millesimo sbagliato si propaga a ogni riparto.
 - **A mano nel foglio**: dire quali colonne compilare (una riga per unità, sopra la riga TOTALE)
   e che ogni colonna `Tab` deve sommare a 1000.
+
+Chiedere se ci sono **appartamenti affittati**: per quelli, `Conduttore` ed `Email conduttore` in
+`Anagrafica`. I millesimi restano dell'unità; la divisione tra proprietario e inquilino avviene
+spesa per spesa con `Quota conduttore %` (vedi `archivio` e `riparto`).
 
 In tutti i casi chiudere con:
 
