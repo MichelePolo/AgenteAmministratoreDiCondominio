@@ -25,7 +25,7 @@ Poi seguire il [TUTORIAL](TUTORIAL.md): in mezz'ora si arriva dal primo avvio al
 
 | Plugin | Descrizione |
 |---|---|
-| [amministratore-condominio](plugins/amministratore-condominio/) | Amministratore di condominio agentico: archivio condiviso su Drive, riparti millesimali con rate, versamenti da estratto conto, comunicazioni, scadenze, cruscotto "come siamo messi". Guida: [README](plugins/amministratore-condominio/README.md) · [Tutorial](TUTORIAL.md) |
+| [amministratore-condominio](plugins/amministratore-condominio/) | Amministratore di condominio agentico: archivio condiviso su Drive, riparti millesimali con rate, versamenti da estratto conto, comunicazioni, scadenze, cruscotto "come siamo messi" anche per email ogni settimana. Guida: [README](plugins/amministratore-condominio/README.md) · [Tutorial](TUTORIAL.md) |
 
 ## Requisiti in breve
 

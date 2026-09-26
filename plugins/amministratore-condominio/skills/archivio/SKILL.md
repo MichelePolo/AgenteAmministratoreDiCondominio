@@ -5,7 +5,7 @@ description: >
   classificazione, li sposta in archivio/ e registra le spese. Usare per "archivia",
   "sistema i documenti", "cosa hanno caricato", "registra questa fattura".
 metadata:
-  version: "0.4.0"
+  version: "0.5.0"
 ---
 
 # Archivio

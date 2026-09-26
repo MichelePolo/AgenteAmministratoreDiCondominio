@@ -142,10 +142,29 @@ Ogni condomino riceve un'email solo con i propri conti: dovuto, versato, rate co
 (pagata, da pagare, scaduta), versamenti registrati e IBAN. Vedi la prima email per intero e una
 tabella di tutte, poi confermi una volta. In modalità collaudo parte una sola email, a te.
 
+## 10. Il riepilogo che arriva da solo
+
+> mandami ogni lunedì come siamo messi
+
+L'assistente controlla che la tua email sia nel registro e che Gmail sia collegato, ti mostra il
+riepilogo di oggi (è quello che riceverai), ti chiede giorno e ora e crea l'automazione:
+
+- con **Claude Desktop** (Mac, Windows) è un'attività locale nella scheda Code → Routines. Alla
+  prima esecuzione ("Run now") consenti sempre le due sole azioni che servono: lo script del
+  riepilogo e l'invio Gmail. Gira quando l'app è aperta e il computer è acceso; se era spento,
+  recupera al risveglio;
+- su **Linux** sono un servizio e un timer di sistema: l'assistente li prepara e ti dà i due
+  comandi da lanciare.
+
+L'email arriva solo a te e contiene solo conteggi, mai nomi o importi dei condomini. È l'unica
+cosa che il plugin fa senza chiederti conferma al momento; per fermarla: "sospendi il riepilogo
+settimanale".
+
 ## Ogni settimana
 
-1. "come siamo messi?": in cinque righe documenti da archiviare, scadenze, assemblea, rate
-   scadute e le tre cose da fare adesso, in ordine di urgenza. Rispondi "fai la 1".
+1. "come siamo messi?" (o l'email del lunedì, se hai attivato il riepilogo): in poche righe
+   documenti da archiviare, scadenze, assemblea, rate scadute e le tre cose da fare adesso, in
+   ordine di urgenza. Rispondi "fai la 1".
 2. "archivia i documenti": svuota l'inbox dei condomini.
 3. "registra i bonifici dell'estratto conto": il saldo e le rate scadute di ogni unità si
    aggiornano da soli nel registro riservato. Prima di sollecitare qualcuno, registra sempre i
@@ -172,5 +191,9 @@ tabella di tutte, poi confermi una volta. In modalità collaudo parte una sola e
   passo 0 e `skills/condominio-setup/references/connettori.md`.
 - *Un condomino vede totali vuoti dal telefono*: il file è stato salvato con formule da un altro
   programma. Scrivi "verifica il registro": i valori vengono riscritti.
+
+- *Il riepilogo del lunedì non arriva*: con Claude Desktop, l'app era chiusa o il computer spento
+  (arriverà al prossimo avvio); guarda la cronologia dell'attività in Routines. Su Linux:
+  `journalctl --user -u riepilogo-<nome del condominio>.service`.
 
 Tutto ciò che l'assistente fa è nel foglio `Diario`. Se non c'è nel Diario, non è successo.

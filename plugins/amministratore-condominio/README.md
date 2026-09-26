@@ -20,6 +20,7 @@ diligente. I file non contengono formule: l'anteprima di Drive mostra sempre i v
 
 | Skill | Quando la usi | Cosa produce |
 |---|---|---|
+| `automazioni` | "mandami ogni lunedì come siamo messi" | il riepilogo settimanale per email, solo all'amministratore e solo con conteggi: attività locale di Claude Desktop o timer di sistema su Linux |
 | `stato` | "come siamo messi?" | in cinque righe: documenti da archiviare, problemi del registro, scadenze, assemblea e termini di legge, rate scadute; le tre cose da fare adesso |
 | `condominio-setup` | la prima volta | verifica dei connettori e di Python, cartella strutturata, i due registri, anagrafica e tabelle millesimali, `LEGGIMI.txt` per i condomini |
 | `archivio` | "archivia i documenti" | legge `da analizzare/`, propone nomi e classificazione, sposta in `archivio/`, registra le spese |
@@ -61,7 +62,8 @@ Poi: aprire come cartella di lavoro la cartella del condominio in Google Drive e
 
 ## Principi di sicurezza
 
-- Nessuna email parte senza conferma esplicita. Alla prima installazione la **modalità collaudo**
+- Nessuna email parte senza conferma esplicita, con una sola eccezione dichiarata: il riepilogo
+  settimanale, che va solo all'amministratore, è attivato da lui e contiene solo conteggi. Alla prima installazione la **modalità collaudo**
   è attiva: tutte le email arrivano solo all'amministratore.
 - Nulla viene cancellato o sovrascritto: i duplicati si spostano, i prospetti hanno sempre un
   nome nuovo, gli errori si annotano.
@@ -73,13 +75,15 @@ Poi: aprire come cartella di lavoro la cartella del condominio in Google Drive e
   possibili, l'assistente chiede.
 - Il plugin cita gli articoli del codice civile pertinenti ma **non fornisce consulenza legale**.
 
-## Limiti noti (versione 0.4)
+## Limiti noti (versione 0.5)
 
 - Il registro è un file `.xlsx`, non un Google Sheet nativo: i condomini lo consultano da browser
   o dall'app Drive, ma la modifica va fatta dall'amministratore. È una scelta: evita un connettore
   Google Sheets, che oggi richiede un progetto Google Cloud.
-- Le automazioni programmate (es. archiviazione ogni mattina) non sono incluse; il plugin è
-  pensato per essere avviato dall'utente.
+- L'unica automazione è il riepilogo settimanale all'amministratore: archiviare, registrare,
+  sollecitare restano operazioni avviate e confermate dall'utente. Con Claude Desktop gira solo a
+  app aperta e computer acceso; su Linux serve systemd. La strada Desktop è scritta sulla
+  documentazione ufficiale ma non ancora provata su un computer reale (segnalazioni benvenute).
 - Le tabelle millesimali vanno fornite dall'utente (dettate, da PDF o a mano); il plugin non le
   calcola dai dati catastali.
 - La divisione tra proprietario e inquilino usa le percentuali standard dell'art. 9 L. 392/1978,
@@ -96,7 +100,8 @@ amministratore-condominio/
   skills/
     condominio-base/        ← modello dati, principi, normativa, scripts/registro.py
     condominio-setup/       ← scripts/crea_registro.py, assets/LEGGIMI.txt, references/connettori.md
-    stato/                  ← scripts/stato.py
+    stato/                  ← scripts/stato.py (anche --testo)
+    automazioni/            ← references/istruzioni-riepilogo.md, scripts/pianifica.py (Linux)
     archivio/               ← scripts/scansiona.py
     riparto/                ← scripts/riparto.py (anche `approva`)
     versamenti/             ← scripts/abbina.py

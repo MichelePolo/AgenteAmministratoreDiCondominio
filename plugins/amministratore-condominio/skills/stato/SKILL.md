@@ -5,7 +5,7 @@ description: >
   scadenze, assemblea, bozze, rate scadute e cosa fare adesso. Usare per "come siamo messi",
   "situazione del condominio", "cosa c'è da fare", "riepilogo".
 metadata:
-  version: "0.4.0"
+  version: "0.5.0"
 ---
 
 # Stato del condominio
