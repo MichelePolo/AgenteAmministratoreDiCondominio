@@ -18,6 +18,19 @@ oppure `A-1`, `B-3`). Stabilita al setup, non cambia mai.
 
 ## `registro-condominio.xlsx` — condiviso con tutti
 
+### Foglio `In breve` (generato, primo foglio)
+
+Riepilogo per i condomini, pensato per l'anteprima di Google Drive su telefono: nome del
+condominio, data di aggiornamento, prossima assemblea e prossima rata, altre scadenze (massimo 4),
+spese registrate nell'esercizio corrente con il totale per tabella (etichette da `Tabelle
+millesimali`), ultimi 5 documenti archiviati con una descrizione ricavata dal nome del file, numero
+di documenti in attesa in `da analizzare/`.
+
+`registro.py` lo **riscrive da zero a ogni salvataggio** e lo tiene in prima posizione e attivo:
+non si compila e non si legge con `read`/`append`/`update`. Non contiene dati per unità (le spese
+`UNITA:` sono sommate insieme come "a carico di singole unità"). `registro.py schema` lo crea nei
+registri di versioni precedenti.
+
 ### Foglio `Condominio` (chiave / valore)
 
 Colonna A = chiave, B = valore (celle gialle), C = nota per chi compila a mano (non letta dagli script).

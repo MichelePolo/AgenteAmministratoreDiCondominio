@@ -25,6 +25,16 @@ class TestFormati(unittest.TestCase):
         self.assertEqual(registro.euro_it(-10), "-10,00 €")
         self.assertEqual(registro.euro_it(0.005), "0,01 €")
 
+    def test_descrizione_leggibile_dal_nome_del_file(self):
+        d = registro.descrivi_file
+        self.assertEqual(d("2026-03-14_fattura_enel_luce-scale_412.50.pdf"),
+                         (dt.date(2026, 3, 14), "Fattura Enel, luce scale · 412,50 €"))
+        self.assertEqual(d("2026-01-10_contratto_otis_manutenzione-ascensore.pdf"),
+                         (dt.date(2026, 1, 10), "Contratto Otis, manutenzione ascensore"))
+        self.assertEqual(d("2026-02-02_preventivo_rossi-impianti_sostituzione-caldaia_8900.00.pdf")[1],
+                         "Preventivo Rossi Impianti, sostituzione caldaia · 8.900,00 €")
+        self.assertEqual(d("scansione senza nome.pdf"), (None, "scansione senza nome.pdf"))
+
 
 class TestInBreve(CondominioTest):
     def in_breve(self):

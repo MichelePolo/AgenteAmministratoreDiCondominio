@@ -13,7 +13,10 @@ COSA PUOI FARE
    "archivio", nella cartella dell'anno e del tipo giusto.
    Se sparisce da "da analizzare", vuol dire che è stata archiviata.
 
-2. Vuoi vedere i conti? Apri  registro-condominio.xlsx
+2. Vuoi sapere come va il condominio? Apri  registro-condominio.xlsx
+   Il primo foglio, "In breve", dice in una schermata la prossima
+   assemblea, la prossima rata, le spese dell'anno e gli ultimi
+   documenti archiviati. Gli altri fogli sono il dettaglio:
    - Anagrafica: chi c'è nel condominio
    - Millesimi: le tabelle millesimali
    - Spese: tutte le spese registrate, con il collegamento al documento

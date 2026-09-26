@@ -419,25 +419,68 @@ def dati_in_breve(wb, cartella, oggi):
     }
 
 
+def descrivi_file(nome):
+    """Nome d'archivio → (data del documento, descrizione leggibile).
+    '2026-03-14_fattura_enel_luce-scale_412.50.pdf' → (2026-03-14, 'Fattura Enel, luce scale · 412,50 €').
+    Un nome che non segue le convenzioni resta com'è, senza data."""
+    base = os.path.splitext(os.path.basename(nome))[0]
+    parti = base.split("_")
+    data = _as_date(parti[0]) if parti else None
+    if data is None or len(parti) < 3:
+        return None, nome
+    tipo, controparte = parti[1].capitalize(), parti[2].replace("-", " ").title()
+    resto = parti[3:]
+    importo = resto.pop() if resto and _num(resto[-1]) is not None else None
+    testo = f"{tipo} {controparte}"
+    if resto:
+        testo += ", " + " ".join(resto).replace("-", " ")
+    if importo is not None:
+        testo += f" · {euro_it(importo)}"
+    return data, testo
+
+
 def sezioni_in_breve(dati):
     """Sceglie cosa vede per primo un condomino dal telefono: [(titolo sezione, [(voce, valore), ...]), ...].
 
-    `dati` è il dizionario di dati_in_breve(): prossima_assemblea, prossime_rate, prossime_scadenze
-    (dict con data, ora, tipo, descrizione), spese (totale, numero, non_pagate, per_tabella con nome e
-    totale), ultimi_archiviati (data, nome), in_attesa (numero di file), esercizio, oggi.
-    Formattare con data_it() e euro_it(). Una colonna larga 28 caratteri per la voce, 42 per il valore.
-    """
-    # TODO(utente): scegliere sezioni, ordine, etichette e quante righe per sezione.
-    # Segnaposto provvisorio: tutto, nell'ordine dei dati, senza limiti.
-    sezioni = []
-    if dati["prossime_scadenze"]:
-        sezioni.append(("Prossime scadenze", [(data_it(x["data"]), x["descrizione"]) for x in dati["prossime_scadenze"]]))
+    In cima ciò che si cerca (assemblea, prossima rata), poi poche altre scadenze, le spese dell'anno
+    e gli ultimi documenti archiviati; in fondo, sempre, i documenti caricati e non ancora archiviati
+    ("l'hanno visto?"). Liste corte: sul telefono in verticale il foglio deve restare breve."""
+    def quando(x):
+        return data_it(x["data"]) + (f", ore {x['ora']}" if x.get("ora") else "")
+
+    sezioni, gia_mostrate = [], []
+    in_cima = []
+    if dati["prossima_assemblea"]:
+        a = dati["prossima_assemblea"]
+        in_cima.append(("Prossima assemblea", f"{quando(a)} — {a['descrizione']}"))
+        gia_mostrate.append(a)
+    if dati["prossime_rate"]:
+        r = dati["prossime_rate"][0]
+        in_cima.append(("Prossima rata", f"{quando(r)} — {r['descrizione']}"))
+        gia_mostrate.append(r)
+    if in_cima:
+        sezioni.append(("Da ricordare", in_cima))
+
+    altre = [x for x in dati["prossime_scadenze"] if not any(x is g for g in gia_mostrate)][:4]
+    if altre:
+        sezioni.append(("Altre scadenze", [(quando(x), x["descrizione"]) for x in altre]))
+
     sp = dati["spese"]
-    sezioni.append((f"Spese {dati['esercizio']}", [("Totale", euro_it(sp["totale"]))] +
-                    [(v["nome"], euro_it(v["totale"])) for v in sp["per_tabella"]]))
-    if dati["ultimi_archiviati"]:
-        sezioni.append(("Archiviati", [(data_it(x["data"]), x["nome"]) for x in dati["ultimi_archiviati"]]))
-    sezioni.append(("Da analizzare", [("File", str(dati["in_attesa"]))]))
+    if sp["numero"]:
+        voci = [(f"Totale ({sp['numero']} {'spesa' if sp['numero'] == 1 else 'spese'})", euro_it(sp["totale"]))]
+        voci += [(f"di cui {v['nome']}", euro_it(v["totale"])) for v in sp["per_tabella"]]
+    else:
+        voci = [("Nessuna spesa registrata", "")]
+    sezioni.append((f"Spese registrate nel {dati['esercizio']}", voci))
+
+    archiviati = []
+    for x in dati["ultimi_archiviati"][:5]:
+        data_doc, testo = descrivi_file(x["nome"])
+        archiviati.append((data_it(data_doc or x["data"]), testo))
+    if archiviati:
+        sezioni.append(("Ultimi documenti archiviati", archiviati))
+
+    sezioni.append(("Cartella «da analizzare»", [("Documenti caricati, in attesa di archiviazione", str(dati["in_attesa"]))]))
     return sezioni
 
 
