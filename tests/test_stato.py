@@ -11,7 +11,7 @@ STATO = os.path.join(SKILLS, "stato", "scripts", "stato.py")
 OGGI = dt.date(2026, 9, 26)
 
 
-class TestStato(CondominioTest):
+class BaseStato(CondominioTest):
     def setUp(self):
         super().setUp()
         self.reg("set", "Condominio", "Email collaudo", "admin@example.it")  # nessun problema bloccante di partenza
@@ -27,6 +27,9 @@ class TestStato(CondominioTest):
     def scadenza(self, giorni, tipo="assemblea", descrizione="Assemblea ordinaria", **extra):
         riga = {"Data": (OGGI + dt.timedelta(days=giorni)).isoformat(), "Tipo": tipo, "Descrizione": descrizione, **extra}
         self.reg("append", "Scadenze", json.dumps(riga))
+
+
+class TestStato(BaseStato):
 
     def test_sola_lettura(self):
         files = [self.path("registro-condominio.xlsx"), self.path("registro-riservato.xlsx")]
@@ -119,6 +122,57 @@ class TestStato(CondominioTest):
         code, out = run(STATO, "--dir", self.path("archivio"))
         self.assertNotEqual(code, 0)
         self.assertIn("la cartella di lavoro non è quella del condominio", out)
+
+
+
+class TestTesto(BaseStato):
+    """stato.py --testo: il riepilogo della chat e dell'email programmata."""
+
+    def testo(self, oggi=OGGI):
+        code, out = run(STATO, "--dir", self.dir, "--oggi", oggi.isoformat(), "--testo")
+        self.assertEqual(code, 0, out)
+        return out
+
+    def test_tutto_in_ordine(self):
+        t = self.testo()
+        self.assertTrue(t.startswith("Condominio Prova — riepilogo al 26 settembre 2026\n\n"))
+        self.assertIn("· Registro in ordine · Modalità collaudo attiva", t)
+        self.assertTrue(t.endswith("Tutto in ordine."))
+        self.assertNotIn("Cosa fare adesso", t)
+
+    def test_righe_e_azioni(self):
+        self.scadenza(12, descrizione="Assemblea ordinaria")
+        self.scadenza(20, tipo="manutenzione", descrizione="Verifica ascensore")
+        self.ris("append", "Rate", json.dumps({"ID unità": "U03", "Esercizio": 2026, "Rata": 1, "Scadenza": "2026-06-30", "Importo": 200}))
+        for n in ("a.pdf", "b.pdf"):
+            open(self.path("da analizzare", n), "w").close()
+        t = self.testo(dt.date.today())  # i file appena creati hanno la data di oggi
+        self.assertIn("· 2 documenti da archiviare\n", t)
+        self.assertIn("Prossime scadenze: Verifica ascensore il", t)
+        self.assertIn("(convocazione non ancora inviata)", t)
+        self.assertIn("· Rate scadute: 1 unità, 200,00 €", t)
+        self.assertIn("Cosa fare adesso:\n1. ", t)
+        self.assertIn('→ "archivia i documenti"', t)
+
+    def test_nessun_dato_per_unita(self):
+        self.ris("append", "Rate", json.dumps({"ID unità": "U03", "Esercizio": 2026, "Rata": 1, "Scadenza": "2026-06-30", "Importo": 200}))
+        t = self.testo()
+        _, anagrafica = self.reg("read", "Anagrafica")
+        for u in anagrafica:
+            for campo in ("ID unità", "Intestatario", "Email", "Conduttore"):
+                if u.get(campo):
+                    self.assertNotIn(str(u[campo]), t, campo)
+
+    def test_problemi_e_riservato_mancante(self):
+        self.reg("set", "Condominio", "Email collaudo", "")
+        shutil.move(self.path("registro-riservato.xlsx"), self.path("altrove.xlsx"))
+        t = self.testo()
+        self.assertIn("· Pagamenti non verificati: registro riservato non trovato", t)
+        self.assertIn("· Registro: 1 problema da correggere", t)
+
+    def test_rendiconto_da_convocare(self):
+        self.reg("set", "Condominio", "Fine esercizio", "2025-12-31")
+        self.assertIn("· Rendiconto: assemblea da tenere entro il 29 giugno 2026", self.testo(dt.date(2026, 5, 15)))
 
 
 if __name__ == "__main__":

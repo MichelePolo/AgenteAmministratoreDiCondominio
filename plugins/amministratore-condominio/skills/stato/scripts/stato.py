@@ -2,12 +2,15 @@
 """
 stato.py — cruscotto del condominio: come siamo messi e cosa fare adesso. Sola lettura.
 
-  stato.py --dir "<cartella>" [--oggi 2026-09-26]
+  stato.py --dir "<cartella>" [--oggi 2026-09-26] [--testo]
 
 Raccoglie in un JSON: documenti in attesa in "da analizzare", problemi e avvisi del registro,
 scadenze vicine e da riproporre, assemblea e termini di legge, prospetti in bozza, rate scadute
 per unità (dal registro riservato), modalità collaudo; poi al massimo 3 azioni suggerite, in
 ordine di urgenza. Non scrive nulla: né registri, né Diario.
+
+Con --testo stampa invece il riepilogo in testo semplice, pronto per la chat o per l'email
+programmata: solo conteggi, nessun nome, interno o importo per unità.
 """
 import argparse
 import datetime as dt
@@ -156,10 +159,62 @@ def azioni_suggerite(st):
     return azioni[:3]
 
 
+def _quando(d, oggi):
+    """'15 ottobre', con l'anno solo se diverso da quello di oggi."""
+    testo = reg.data_it(d)
+    return testo.rsplit(" ", 1)[0] if d.year == oggi.year else testo
+
+
+def _n(n, singolare, plurale):
+    return f"{n} {singolare if n == 1 else plurale}"
+
+
+def testo_riepilogo(st):
+    """Riepilogo in testo semplice. Una riga per argomento, solo se c'è qualcosa da dire; poi le azioni.
+    Nessun dato per unità: vale anche per l'email programmata, che parte senza conferma."""
+    oggi = st["oggi"]
+    righe = []
+    ib = st["inbox"]
+    if ib["in_attesa"]:
+        vecchio = ib["piu_vecchio_giorni"] or 0
+        righe.append(_n(ib["in_attesa"], "documento da archiviare", "documenti da archiviare")
+                     + (f" (il più vecchio da {_n(vecchio, 'giorno', 'giorni')})" if vecchio >= 1 else ""))
+    ass = st["scadenze"]["assemblea"]
+    altre = [x for x in st["scadenze"]["prossime"] if not (ass and x["id"] == ass["id"])][:3]
+    if altre:
+        righe.append("Prossime scadenze: " + "; ".join(f"{x['descrizione']} il {_quando(x['data'], oggi)}" for x in altre))
+    if ass:
+        nota = " (convocazione non ancora inviata)" if (st["assemblea"]["convocazione_inviata"] is False
+                                                        and (ass["data"] - oggi).days <= 30) else ""
+        righe.append(f"Assemblea il {_quando(ass['data'], oggi)}{nota}")
+    elif st["assemblea"]["termine_rendiconto"]:
+        righe.append(f"Rendiconto: assemblea da tenere entro il {reg.data_it(st['assemblea']['termine_rendiconto'])}")
+    pag = st["pagamenti"]
+    if pag is None:
+        righe.append("Pagamenti non verificati: registro riservato non trovato")
+    elif pag["unita_in_ritardo"]:
+        righe.append(f"Rate scadute: {_n(pag['unita_in_ritardo'], 'unità', 'unità')}, {reg.euro_it(pag['totale_scaduto'])}")
+    if st["bozze"]:
+        righe.append(_n(len(st["bozze"]), "prospetto in bozza", "prospetti in bozza"))
+    problemi = st["registro"]["problemi"]
+    stato_reg = "Registro in ordine" if not problemi else f"Registro: {_n(len(problemi), 'problema', 'problemi')} da correggere"
+    righe.append(stato_reg + (" · Modalità collaudo attiva" if st["condominio"]["collaudo"] else ""))
+
+    out = [f"{st['condominio']['nome'] or 'Condominio'} — riepilogo al {reg.data_it(oggi)}", ""]
+    out += [f"· {r}" for r in righe]
+    if st["azioni"]:
+        out += ["", "Cosa fare adesso:"]
+        out += [f"{i}. {a['testo']} → \"{a['frase']}\"" for i, a in enumerate(st["azioni"], start=1)]
+    else:
+        out += ["", "Tutto in ordine."]
+    return "\n".join(out)
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--dir", default=".")
     p.add_argument("--oggi", type=dt.date.fromisoformat, default=dt.date.today())
+    p.add_argument("--testo", action="store_true", help="riepilogo in testo semplice invece del JSON")
     a = p.parse_args()
     path_c = os.path.join(a.dir, reg.DEFAULT_FILE)
     if not os.path.exists(path_c):
@@ -186,6 +241,9 @@ def main():
     if st["pagamenti"] is None:
         avvisi.append("Registro riservato non trovato: pagamenti non verificati (controllare 'Percorso registro riservato')")
     st["azioni"] = azioni_suggerite(st)
+    if a.testo:
+        print(testo_riepilogo(st))
+        return
     print(json.dumps(st, ensure_ascii=False, indent=2, default=lambda o: o.isoformat() if hasattr(o, "isoformat") else str(o)))
 
 
