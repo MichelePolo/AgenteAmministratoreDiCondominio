@@ -26,6 +26,8 @@ try:
 except ImportError:
     sys.exit("openpyxl non installato: pip install openpyxl")
 
+BASE_SCRIPTS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "condominio-base", "scripts")
+
 FONT = "Arial"
 HDR_FILL = PatternFill("solid", fgColor="DDE7F0")
 INPUT_FILL = PatternFill("solid", fgColor="FFF8DC")
@@ -180,6 +182,11 @@ def main():
     rr = os.path.join(a.dir, "registro-riservato.xlsx")
     if not os.path.exists(rc):
         crea_condominio(rc, a.nome, a.esercizio, a.esempio); creati.append(rc)
+        # primo salvataggio con registro.py: aggiunge il foglio "In breve" e calcola i valori derivati
+        sys.path.insert(0, os.path.abspath(BASE_SCRIPTS))
+        import registro
+        import openpyxl
+        registro._save(openpyxl.load_workbook(rc), rc)
     if not os.path.exists(rr):
         crea_riservato(rr, a.esercizio, a.esempio); creati.append(rr)
     leggimi_src = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "assets", "LEGGIMI.txt")

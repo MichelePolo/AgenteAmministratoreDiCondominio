@@ -18,8 +18,8 @@ try:
 except ImportError:
     sys.exit("openpyxl non installato: pip install openpyxl")
 
-INBOX = "da analizzare"
-SKIP_EXT = {".gdoc", ".gsheet", ".gslides", ".gform", ".gdraw", ".gmap", ".tmp", ".crdownload", ".drivedownload", ".driveupload"}
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "condominio-base", "scripts"))
+from registro import INBOX, da_ignorare  # stesse regole del conteggio "documenti in attesa" del foglio In breve
 
 
 def sha256(path):
@@ -62,9 +62,7 @@ def main():
     visti = {}  # hash -> primo file della stessa scansione
     for root, _, names in os.walk(inbox):
         for n in sorted(names):
-            if n.startswith(".") or n.startswith("~$") or n.lower() in ("desktop.ini", "thumbs.db"):
-                continue
-            if os.path.splitext(n)[1].lower() in SKIP_EXT:  # scorciatoie e file temporanei di Google Drive
+            if da_ignorare(n):  # nascosti, temporanei, scorciatoie di Google Drive
                 continue
             fp = os.path.join(root, n)
             h = sha256(fp)

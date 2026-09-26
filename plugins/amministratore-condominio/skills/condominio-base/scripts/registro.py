@@ -29,17 +29,21 @@ import datetime as dt
 import json
 import os
 import sys
-from decimal import Decimal, InvalidOperation
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 
 try:
     import openpyxl
-    from openpyxl.styles import Font, PatternFill
+    from openpyxl.styles import Alignment, Font, PatternFill
     from openpyxl.utils import get_column_letter
 except ImportError:  # pragma: no cover
     sys.exit("openpyxl non installato: pip install openpyxl")
 
 DEFAULT_FILE = "registro-condominio.xlsx"
 KV_SHEETS = {"Condominio"}
+IN_BREVE = "In breve"
+GENERATED_SHEETS = {IN_BREVE}  # rigenerati a ogni salvataggio: mai letti né scritti come dati
+INBOX = "da analizzare"
+INBOX_SKIP_EXT = {".gdoc", ".gsheet", ".gslides", ".gform", ".gdraw", ".gmap", ".tmp", ".crdownload", ".drivedownload", ".driveupload"}
 FONT = "Arial"
 FMT_EURO = "#,##0.00 €"
 FMT_DATE = "yyyy-mm-dd"
@@ -305,10 +309,172 @@ def _refresh(wb, oggi=None):
 
 
 def _save(wb, path, oggi=None):
-    """Unico punto di salvataggio: ricalcola i valori derivati, aggiorna la data di elaborazione, salva."""
+    """Unico punto di salvataggio: ricalcola i valori derivati, aggiorna la data di elaborazione,
+    rigenera il foglio In breve (solo registro condiviso), salva."""
     _refresh(wb, oggi)
     _touch(wb)
+    if os.path.basename(path) == DEFAULT_FILE:
+        _in_breve(wb, os.path.dirname(os.path.abspath(path)), oggi or dt.date.today())
     wb.save(path)
+
+
+# ---------------------------------------------------------------- foglio "In breve"
+# Primo foglio del registro condiviso, pensato per l'anteprima di Google Drive su telefono: due colonne,
+# una sezione sotto l'altra, testo già formattato in italiano. Nessun dato per unità (nomi, ID, importi).
+
+MESI = ["gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno", "luglio", "agosto", "settembre",
+        "ottobre", "novembre", "dicembre"]
+
+
+def data_it(d):
+    """2026-11-30 → '30 novembre 2026'."""
+    d = _as_date(d)
+    return f"{d.day} {MESI[d.month - 1]} {d.year}" if d else ""
+
+
+def euro_it(x):
+    """1250.5 → '1.250,50 €'."""
+    d = (_num(x) or Decimal(0)).quantize(CENT, rounding=ROUND_HALF_UP)
+    testo = f"{abs(d):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    return f"{'-' if d < 0 else ''}{testo} €"
+
+
+def da_ignorare(nome):
+    """File dell'inbox che non sono documenti: nascosti, temporanei, scorciatoie di Google Drive."""
+    return (nome.startswith(".") or nome.startswith("~$") or nome.lower() in ("desktop.ini", "thumbs.db")
+            or os.path.splitext(nome)[1].lower() in INBOX_SKIP_EXT)
+
+
+def file_in_attesa(cartella):
+    inbox = os.path.join(cartella, INBOX)
+    if not os.path.isdir(inbox):
+        return 0
+    return sum(1 for _, _, nomi in os.walk(inbox) for n in nomi if not da_ignorare(n))
+
+
+def dati_in_breve(wb, cartella, oggi):
+    """Raccoglie i dati pubblici del foglio In breve. Nessun dato per unità: le spese a carico di una sola
+    unità sono sommate insieme, senza dire quale."""
+    kv = _kv(wb["Condominio"]) if "Condominio" in wb.sheetnames else {}
+    es = _num(kv.get("Esercizio corrente"))
+    es = int(es) if es is not None else oggi.year
+    etichette = {}
+    for parte in str(kv.get("Tabelle millesimali") or "").split(";"):
+        codice, _, nome = parte.partition(":")
+        if codice.strip() and nome.strip():
+            etichette[codice.strip().upper()] = nome.strip()
+
+    scadenze = []
+    for r in _rows(wb["Scadenze"]) if "Scadenze" in wb.sheetnames else []:
+        d = _as_date(r.get("Data"))
+        if d and d >= oggi:
+            scadenze.append({"data": d, "ora": r.get("Ora"), "tipo": str(r.get("Tipo") or "").strip().lower(),
+                             "descrizione": r.get("Descrizione") or ""})
+    scadenze.sort(key=lambda x: (x["data"], str(x["ora"] or "")))
+
+    per_tab, totale, numero, da_pagare = {}, Decimal(0), 0, 0
+    for r in _rows(wb["Spese"]) if "Spese" in wb.sheetnames else []:
+        imp = _num(r.get("Importo"))
+        if imp is None:
+            continue
+        e = _num(r.get("Esercizio"))
+        anno = int(e) if e is not None else (_as_date(r.get("Data")).year if _as_date(r.get("Data")) else None)
+        if anno != es:
+            continue
+        tab = str(r.get("Tabella") or "").strip().upper()
+        if tab.startswith("UNITA:") or tab.startswith("UNITÀ:"):
+            chiave, nome = "UNITA", "a carico di singole unità"
+        elif tab == "MANUALE":
+            chiave, nome = "MANUALE", "riparto concordato"
+        elif tab:
+            chiave, nome = tab, etichette.get(tab, f"tabella {tab}")
+        else:
+            chiave, nome = "?", "tabella da assegnare"
+        voce = per_tab.setdefault(chiave, {"codice": chiave, "nome": nome, "totale": Decimal(0), "numero": 0})
+        voce["totale"] += imp
+        voce["numero"] += 1
+        totale += imp
+        numero += 1
+        if str(r.get("Pagata") or "").strip().upper() != "SI":
+            da_pagare += 1
+
+    archiviati = []
+    for r in _rows(wb["Indice"]) if "Indice" in wb.sheetnames else []:
+        nome = str(r.get("Nome archivio") or "")
+        if nome and not nome.startswith("DUPLICATO"):
+            archiviati.append({"data": _as_date(r.get("Data elaborazione")), "nome": nome})
+    archiviati.sort(key=lambda x: x["data"] or dt.date.min, reverse=True)
+
+    return {
+        "nome": kv.get("Nome") or "Condominio",
+        "oggi": oggi,
+        "esercizio": es,
+        "prossima_assemblea": next((x for x in scadenze if x["tipo"] == "assemblea"), None),
+        "prossime_rate": [x for x in scadenze if x["tipo"] == "rata"],
+        "prossime_scadenze": scadenze,
+        "spese": {"totale": totale, "numero": numero, "non_pagate": da_pagare,
+                  "per_tabella": sorted(per_tab.values(), key=lambda v: v["codice"])},
+        "ultimi_archiviati": archiviati,
+        "in_attesa": file_in_attesa(cartella),
+    }
+
+
+def sezioni_in_breve(dati):
+    """Sceglie cosa vede per primo un condomino dal telefono: [(titolo sezione, [(voce, valore), ...]), ...].
+
+    `dati` è il dizionario di dati_in_breve(): prossima_assemblea, prossime_rate, prossime_scadenze
+    (dict con data, ora, tipo, descrizione), spese (totale, numero, non_pagate, per_tabella con nome e
+    totale), ultimi_archiviati (data, nome), in_attesa (numero di file), esercizio, oggi.
+    Formattare con data_it() e euro_it(). Una colonna larga 28 caratteri per la voce, 42 per il valore.
+    """
+    # TODO(utente): scegliere sezioni, ordine, etichette e quante righe per sezione.
+    # Segnaposto provvisorio: tutto, nell'ordine dei dati, senza limiti.
+    sezioni = []
+    if dati["prossime_scadenze"]:
+        sezioni.append(("Prossime scadenze", [(data_it(x["data"]), x["descrizione"]) for x in dati["prossime_scadenze"]]))
+    sp = dati["spese"]
+    sezioni.append((f"Spese {dati['esercizio']}", [("Totale", euro_it(sp["totale"]))] +
+                    [(v["nome"], euro_it(v["totale"])) for v in sp["per_tabella"]]))
+    if dati["ultimi_archiviati"]:
+        sezioni.append(("Archiviati", [(data_it(x["data"]), x["nome"]) for x in dati["ultimi_archiviati"]]))
+    sezioni.append(("Da analizzare", [("File", str(dati["in_attesa"]))]))
+    return sezioni
+
+
+def _in_breve(wb, cartella, oggi):
+    """Rigenera il foglio In breve e lo mette per primo e attivo (è quello che l'anteprima Drive apre)."""
+    dati = dati_in_breve(wb, cartella, oggi)
+    if IN_BREVE in wb.sheetnames:
+        del wb[IN_BREVE]
+    ws = wb.create_sheet(IN_BREVE, 0)
+    for altro in wb.worksheets:
+        altro.sheet_view.tabSelected = False
+    wb.active = 0
+    ws.sheet_view.tabSelected = True
+    ws.column_dimensions["A"].width = 28
+    ws.column_dimensions["B"].width = 42
+    a_capo = Alignment(wrap_text=True, vertical="top")
+
+    ws.append([dati["nome"]])
+    ws["A1"].font = Font(name=FONT, bold=True, size=14)
+    ws.append([f"Aggiornato il {data_it(oggi)}"])
+    ws["A2"].font = Font(name=FONT, italic=True, color="666666")
+    for titolo, voci in sezioni_in_breve(dati):
+        ws.append([])
+        ws.append([titolo, None])
+        for c in ws[ws.max_row]:
+            c.font = Font(name=FONT, bold=True)
+            c.fill = HDR_FILL
+        for voce, valore in voci:
+            ws.append([voce, valore])
+            for c in ws[ws.max_row]:
+                c.font = Font(name=FONT)
+                c.alignment = a_capo
+    ws.append([])
+    for nota in ("I pagamenti delle singole unità non sono qui: chiedi all'amministratore.",
+                 "Foglio aggiornato automaticamente: le modifiche fatte a mano vengono sovrascritte."):
+        ws.append([nota])
+        ws.cell(ws.max_row, 1).font = Font(name=FONT, italic=True, color="666666")
 
 
 def _cond(cond):
@@ -367,7 +533,7 @@ def cmd_info(a):
     if "Condominio" in wb.sheetnames:
         out["condominio"] = _kv(wb["Condominio"])
     for s in wb.sheetnames:
-        if s not in KV_SHEETS:
+        if s not in KV_SHEETS and s not in GENERATED_SHEETS:
             righe = _rows(wb[s])
             out[f"righe_{s}"] = len([r for r in righe if str(r.get(_headers(wb[s])[0]) or "").strip().upper() != "TOTALE"])
     _out(out)
@@ -377,6 +543,8 @@ def cmd_read(a):
     wb = _wb(a.path)
     if a.sheet not in wb.sheetnames:
         sys.exit(f"Foglio inesistente: {a.sheet}. Disponibili: {wb.sheetnames}")
+    if a.sheet in GENERATED_SHEETS:
+        sys.exit(f"'{a.sheet}' è un foglio di sola consultazione, generato dagli altri: leggere quelli")
     _refresh(wb, a.oggi)
     ws = wb[a.sheet]
     if a.sheet in KV_SHEETS:
@@ -419,7 +587,7 @@ def aggiungi(ws, data):
 
 def cmd_append(a):
     wb = _wb(a.path)
-    if a.sheet not in wb.sheetnames or a.sheet in KV_SHEETS:
+    if a.sheet not in wb.sheetnames or a.sheet in KV_SHEETS or a.sheet in GENERATED_SHEETS:
         sys.exit(f"Foglio non valido per append: {a.sheet}")
     try:
         riga, nuovo_id = aggiungi(wb[a.sheet], json.loads(a.json))
@@ -431,7 +599,7 @@ def cmd_append(a):
 
 def cmd_update(a):
     wb = _wb(a.path)
-    if a.sheet not in wb.sheetnames or a.sheet in KV_SHEETS:
+    if a.sheet not in wb.sheetnames or a.sheet in KV_SHEETS or a.sheet in GENERATED_SHEETS:
         sys.exit(f"Foglio non valido per update: {a.sheet}")
     ws = wb[a.sheet]
     hdr = _headers(ws)
@@ -634,6 +802,8 @@ def cmd_schema(a):
                 ws.column_dimensions[get_column_letter(col)].width = max(14, len(k) + 2)
                 hdr.append(k)
                 aggiunte.append(f"{sheet}: colonna '{k}' (in coda)")
+    if os.path.basename(a.path) == DEFAULT_FILE and IN_BREVE not in wb.sheetnames:
+        aggiunte.append(f"foglio '{IN_BREVE}' (in prima posizione, generato)")
     if aggiunte:
         _save(wb, a.path, a.oggi)
     _out({"ok": True, "aggiunte": aggiunte})
