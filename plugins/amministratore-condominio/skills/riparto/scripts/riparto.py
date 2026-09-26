@@ -19,6 +19,16 @@ Regole:
 
 Produce un xlsx in prospetti/ (nome con suffisso _bozza; non sovrascrive mai un file esistente) con
 fogli Riepilogo, Dettaglio, Millesimi usati — solo valori, nessuna formula — e stampa un riepilogo JSON.
+
+Dopo l'approvazione dell'assemblea:
+
+  riparto.py approva --dir "<cartella>" --prospetto prospetti/<file>_bozza.xlsx --scadenze 2026-10-31,2027-01-31
+                     --approvato "<nome>" [--esercizio 2026] [--verbale "<riferimento>"] [--sostituisce prospetti/<file>.xlsx]
+
+scrive le rate nel foglio Rate del registro riservato (Dovuto e Scaduto si ricalcolano da lì), crea le
+righe mancanti di Situazione, aggiunge le scadenze delle rate al foglio Scadenze (senza importi per
+unità), annota il Diario e, per ultimo, toglie _bozza dal nome del prospetto. Rifiuta di approvare due
+volte lo stesso prospetto.
 """
 import argparse
 import datetime as dt
@@ -35,6 +45,8 @@ try:
     from openpyxl.utils import get_column_letter
 except ImportError:
     sys.exit("openpyxl non installato: pip install openpyxl")
+
+BASE_SCRIPTS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "condominio-base", "scripts")
 
 FONT = "Arial"
 CENT = Decimal("0.01")
@@ -323,7 +335,172 @@ def calcola(a):
     }, ensure_ascii=False, indent=2, default=str))
 
 
+def _registro():
+    """Importa registro.py dalla skill condominio-base (stessa installazione del plugin)."""
+    sys.path.insert(0, os.path.abspath(BASE_SCRIPTS))
+    try:
+        import registro
+    except ImportError:
+        sys.exit(f"registro.py non trovato in {os.path.abspath(BASE_SCRIPTS)}: il plugin è installato in modo incompleto")
+    return registro
+
+
+def _fallisci(errori):
+    print(json.dumps({"ok": False, "errori": errori}, ensure_ascii=False, indent=2))
+    sys.exit(2)
+
+
+def leggi_riepilogo(path):
+    """Righe del foglio Riepilogo di un prospetto: (titolo, [{"ID unità", "Intestatario", "Totale dovuto", "rate": [...]}])."""
+    ws = openpyxl.load_workbook(path)["Riepilogo"]
+    titolo = str(ws["A1"].value or "")
+    titolo = titolo.split(" — ", 1)[1] if " — " in titolo else titolo
+    hdr = [c.value for c in ws[4]]
+    if "ID unità" not in hdr or "Totale dovuto" not in hdr:
+        raise ValueError("il foglio Riepilogo non ha le colonne 'ID unità' e 'Totale dovuto' in riga 4")
+    col_rate = [i for i, h in enumerate(hdr) if isinstance(h, str) and re.fullmatch(r"Rata \d+", h)]
+    righe = []
+    for r in ws.iter_rows(min_row=5, values_only=True):
+        uid = r[hdr.index("ID unità")]
+        if blank(uid) or str(uid).strip().upper() == "TOTALE":
+            break
+        righe.append({"ID unità": str(uid).strip(), "Intestatario": r[hdr.index("Intestatario")] if "Intestatario" in hdr else None,
+                      "Totale dovuto": D(r[hdr.index("Totale dovuto")]), "rate": [D(r[i]) for i in col_rate]})
+    return titolo, righe
+
+
+def approva(a):
+    reg = _registro()
+    errori = []
+    path_c = os.path.join(a.dir, "registro-condominio.xlsx")
+    if not os.path.exists(path_c):
+        sys.exit("registro-condominio.xlsx non trovato: eseguire condominio-setup")
+    wb_c = openpyxl.load_workbook(path_c)
+    path_r = reg.percorso_riservato(a.dir, wb_c)
+    if not os.path.exists(path_r):
+        sys.exit(f"Registro riservato non trovato: {path_r} (controllare 'Percorso registro riservato')")
+    wb_r = openpyxl.load_workbook(path_r)
+    if "Rate" not in wb_r.sheetnames:
+        _fallisci(["Il registro riservato non ha il foglio Rate: eseguire `registro.py --file registro-riservato.xlsx schema`"])
+    esercizio = a.esercizio or int(reg._kv(wb_c["Condominio"]).get("Esercizio corrente") or dt.date.today().year)
+
+    # --- controlli: nessuna scrittura finché qualcosa non torna
+    bozza = os.path.join(a.dir, a.prospetto)
+    if not bozza.endswith("_bozza.xlsx"):
+        _fallisci([f"{a.prospetto} non è una bozza (manca il suffisso _bozza): è già stato approvato?"])
+    if not os.path.exists(bozza):
+        gia = bozza[: -len("_bozza.xlsx")] + ".xlsx"
+        _fallisci([f"Prospetto non trovato: {a.prospetto}" + (f" (esiste {os.path.relpath(gia, a.dir)}: già approvato?)" if os.path.exists(gia) else "")])
+    # nome definitivo scelto prima dei controlli: se esiste già un prospetto approvato con lo stesso nome
+    # (riparto rifatto lo stesso giorno), questo diventa _2, _3…
+    definitivo = nome_libero(bozza[: -len("_bozza.xlsx")] + ".xlsx")
+    nome_def = os.path.basename(definitivo)
+    try:
+        titolo, righe = leggi_riepilogo(bozza)
+    except (KeyError, ValueError) as e:
+        _fallisci([f"Prospetto illeggibile: {e}"])
+    if not righe:
+        _fallisci(["Il foglio Riepilogo del prospetto non contiene unità"])
+    try:
+        scadenze = [dt.date.fromisoformat(x.strip()) for x in a.scadenze.split(",") if x.strip()]
+    except ValueError:
+        _fallisci([f"Scadenze non valide: {a.scadenze} (formato AAAA-MM-GG separate da virgola)"])
+    n_rate = len(righe[0]["rate"]) or 1
+    if len(scadenze) != n_rate:
+        errori.append(f"Il prospetto ha {n_rate} rat{'a' if n_rate == 1 else 'e'}, sono state indicate {len(scadenze)} scadenze")
+    if scadenze != sorted(scadenze):
+        errori.append("Le scadenze vanno indicate in ordine di data")
+    rate_esistenti = reg._rows(wb_r["Rate"])
+    if any(str(r.get("Prospetto") or "") == nome_def for r in rate_esistenti):
+        errori.append(f"{nome_def} risulta già approvato: il foglio Rate ha già le sue rate")
+    sostituito = os.path.basename(a.sostituisce) if a.sostituisce else None
+    if sostituito and not any(str(r.get("Prospetto") or "") == sostituito for r in rate_esistenti):
+        errori.append(f"--sostituisce {sostituito}: nessuna rata di quel prospetto nel foglio Rate")
+    if errori:
+        _fallisci(errori)
+
+    # --- registro riservato: rate, righe di Situazione, dovuti 0.3 riportati
+    ws_rate, ws_sit = wb_r["Rate"], wb_r["Situazione"]
+    hdr_rate = reg._headers(ws_rate)
+    sostituite = 0
+    if sostituito:
+        c_pro, c_val, c_note = (hdr_rate.index(h) + 1 for h in ("Prospetto", "Valida", "Note"))
+        for r in range(2, ws_rate.max_row + 1):
+            if str(ws_rate.cell(r, c_pro).value or "") == sostituito:
+                reg._put(ws_rate, r, c_val, "Valida", "NO")
+                reg._put(ws_rate, r, c_note, "Note", f"sostituita da {nome_def}")
+                sostituite += 1
+    sit = {(str(r.get("ID unità") or "").strip(), int(reg._num(r.get("Esercizio")) or 0)): r for r in reg._rows(ws_sit)}
+    con_rate = {str(r.get("ID unità") or "").strip() for r in rate_esistenti if int(reg._num(r.get("Esercizio")) or 0) == esercizio}
+    situazioni_create, riportati = [], {}
+    for u in righe:
+        uid = u["ID unità"]
+        riga_sit = sit.get((uid, esercizio))
+        if riga_sit is None:
+            reg.aggiungi(ws_sit, {"ID unità": uid, "Intestatario": u["Intestatario"], "Esercizio": esercizio, "Livello sollecito": 0})
+            situazioni_create.append(uid)
+        elif uid not in con_rate and (reg._num(riga_sit.get("Dovuto")) or 0) != 0:
+            # registro 0.3: il Dovuto scritto a mano diventa una rata senza scadenza, così non si perde
+            dovuto = reg._num(riga_sit.get("Dovuto"))
+            reg.aggiungi(ws_rate, {"ID unità": uid, "Esercizio": esercizio, "Prospetto": "Dovuto registrato prima della 0.4",
+                                   "Rata": 0, "Importo": dovuto, "Valida": "SI",
+                                   "Note": "riportato dal Dovuto di Situazione alla prima approvazione con le rate"})
+            riportati[uid] = reg._plain(dovuto)
+        importi = u["rate"] or [u["Totale dovuto"]]
+        for n, (scad, imp) in enumerate(zip(scadenze, importi), start=1):
+            reg.aggiungi(ws_rate, {"ID unità": uid, "Esercizio": esercizio, "Prospetto": nome_def, "Rata": n,
+                                   "Scadenza": scad, "Importo": imp, "Valida": "SI"})
+
+    # --- registro condiviso: scadenze delle rate (solo date) e Diario
+    ws_scad = wb_c["Scadenze"]
+    scadenze_create = []
+    for n, scad in enumerate(scadenze, start=1):
+        descr = f"Rata {n} di {n_rate} — {titolo}" if n_rate > 1 else f"Pagamento — {titolo}"
+        _, sid = reg.aggiungi(ws_scad, {"Data": scad, "Tipo": "rata", "Descrizione": descr, "Ricorrenza": "nessuna",
+                                        "Note": f"prospetto {nome_def}"})
+        scadenze_create.append({"ID": sid, "Data": scad.isoformat(), "Descrizione": descr})
+    totale = sum(u["Totale dovuto"] for u in righe)
+    dettaglio = (f"{nome_def}: {len(righe)} unità, totale {totale:.2f} €, {n_rate} rat{'a' if n_rate == 1 else 'e'} "
+                 f"({', '.join(d.isoformat() for d in scadenze)})")
+    if a.verbale:
+        dettaglio += f"; verbale: {a.verbale}"
+    if sostituito:
+        dettaglio += f"; sostituisce {sostituito}"
+    reg.aggiungi(wb_c["Diario"], {"Data-ora": dt.datetime.now().isoformat(timespec="seconds"), "Operazione": "Approvato prospetto di riparto",
+                                  "Dettaglio": dettaglio, "Eseguito da": "IA", "Approvato da": a.approvato})
+
+    # --- salvataggi, poi la rinomina per ultima
+    reg._save(wb_r, path_r)
+    reg._save(wb_c, path_c)
+    os.rename(bozza, definitivo)
+    print(json.dumps({
+        "ok": True, "prospetto": os.path.relpath(definitivo, a.dir), "esercizio": esercizio, "unita": len(righe),
+        "totale": float(totale), "righe_rate": len(righe) * n_rate, "rate_sostituite": sostituite,
+        "situazioni_create": situazioni_create, "dovuti_precedenti_riportati": riportati,
+        "scadenze_create": scadenze_create,
+        "prossimi_passi": ["scadenze: allineare il calendario per le nuove righe di Scadenze",
+                           "comunicazioni: inviare il prospetto approvato ai condomini"],
+    }, ensure_ascii=False, indent=2))
+
+
 def main():
+    if len(sys.argv) > 1 and sys.argv[1] == "approva":
+        p = argparse.ArgumentParser(prog="riparto.py approva", description="Registra l'approvazione di un prospetto di riparto.")
+        p.add_argument("--dir", default=".")
+        p.add_argument("--prospetto", required=True, help="percorso relativo del prospetto _bozza.xlsx")
+        p.add_argument("--scadenze", required=True, help="date delle rate AAAA-MM-GG separate da virgola, una per rata")
+        p.add_argument("--approvato", required=True, help="chi ha approvato (per il Diario)")
+        p.add_argument("--esercizio", type=int)
+        p.add_argument("--verbale")
+        p.add_argument("--sostituisce", help="prospetto approvato che questo sostituisce (es. preventivo → consuntivo)")
+        a = p.parse_args(sys.argv[2:])
+        try:
+            approva(a)
+        except SystemExit:
+            raise
+        except Exception as e:  # mai un traceback all'utente
+            _fallisci([f"{type(e).__name__}: {e}"])
+        return
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--dir", default=".")
     p.add_argument("--esercizio", type=int)

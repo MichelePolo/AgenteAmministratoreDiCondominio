@@ -233,7 +233,8 @@ def _conti(wb, uid, es, dovuto_scritto, oggi):
     """Conti di un'unità per un esercizio (es None = tutti), dal registro riservato.
 
     Dovuto: somma delle rate valide se l'unità ha righe in `Rate` per l'esercizio, altrimenti il
-    valore scritto (registri 0.3). Versamenti imputati alle rate in ordine di scadenza. Scaduto:
+    valore scritto (registri 0.3). Versamenti imputati alle rate in ordine di scadenza; una rata senza
+    scadenza (dovuto riportato da un registro 0.3) viene coperta per prima e non risulta mai scaduta. Scaduto:
     None senza rate (non si sa quanto sia in ritardo), altrimenti rate scadute non coperte."""
     uid = str(uid).strip()
     vers = [v for v in (_rows(wb["Versamenti"]) if "Versamenti" in wb.sheetnames else [])
@@ -246,19 +247,19 @@ def _conti(wb, uid, es, dovuto_scritto, oggi):
             if str(r.get("ID unità") or "").strip() == uid and _stesso_esercizio(int(e) if e is not None else None, es):
                 righe_rate.append(r)
     valide = [r for r in righe_rate if str(r.get("Valida") or "SI").strip().upper() != "NO"]
-    valide.sort(key=lambda r: (_as_date(r.get("Scadenza")) or dt.date.max, str(r.get("Prospetto") or ""), _num(r.get("Rata")) or 0))
+    valide.sort(key=lambda r: (_as_date(r.get("Scadenza")) or dt.date.min, str(r.get("Prospetto") or ""), _num(r.get("Rata")) or 0))
     if righe_rate:
         dovuto = sum((_num(r.get("Importo")) or Decimal(0) for r in valide), Decimal(0))
     else:
         dovuto = _num(dovuto_scritto) or Decimal(0)
-    rate, residuo, scadute = [], versato, Decimal(0)
+    rate, residuo, scoperto = [], versato, Decimal(0)
     for r in valide:
         imp = _num(r.get("Importo")) or Decimal(0)
         pagato = max(Decimal(0), min(imp, residuo))
         residuo -= pagato
         scad = _as_date(r.get("Scadenza"))
         if scad is not None and scad < oggi:
-            scadute += imp
+            scoperto += imp - pagato  # dall'imputazione, non da "scadute − versato": la rata 0 senza data assorbe i primi versamenti
         if pagato >= imp:
             stato = "pagata"
         elif scad is not None and scad < oggi:
@@ -269,7 +270,7 @@ def _conti(wb, uid, es, dovuto_scritto, oggi):
             stato = "da pagare"
         rate.append({"Prospetto": r.get("Prospetto"), "Rata": _norm(r.get("Rata")), "Scadenza": _norm(r.get("Scadenza")),
                      "Importo": _plain(imp), "Pagato": _plain(pagato), "Stato": stato})
-    scaduto = max(Decimal(0), scadute - versato) if righe_rate else None
+    scaduto = max(Decimal(0), scoperto) if righe_rate else None
     return {"Dovuto": dovuto, "Versato": versato, "Saldo": dovuto - versato, "Scaduto": scaduto,
             "rate": rate, "versamenti": vers}
 
@@ -343,6 +344,16 @@ def _kv(ws):
     return {r[0].value: _norm(r[1].value) for r in ws.iter_rows(min_row=1, max_col=2) if not _blank(r[0].value)}
 
 
+def percorso_riservato(cartella, wb_condominio=None):
+    """Percorso di registro-riservato.xlsx: la chiave `Percorso registro riservato` del foglio Condominio
+    (assoluta o relativa alla cartella del condominio) se valorizzata, altrimenti la cartella stessa."""
+    if wb_condominio is None:
+        wb_condominio = _wb(os.path.join(cartella, DEFAULT_FILE))
+    altro = _kv(wb_condominio["Condominio"]).get("Percorso registro riservato") if "Condominio" in wb_condominio.sheetnames else None
+    base = os.path.join(cartella, os.path.expanduser(str(altro).strip())) if not _blank(altro) else cartella
+    return os.path.join(base, "registro-riservato.xlsx")
+
+
 def _out(obj):
     print(json.dumps(obj, ensure_ascii=False, indent=2, default=str))
 
@@ -382,16 +393,14 @@ def cmd_read(a):
         _out(rows)
 
 
-def cmd_append(a):
-    wb = _wb(a.path)
-    if a.sheet not in wb.sheetnames or a.sheet in KV_SHEETS:
-        sys.exit(f"Foglio non valido per append: {a.sheet}")
-    ws = wb[a.sheet]
+def aggiungi(ws, data):
+    """Aggiunge una riga (dict colonna→valore) prima della riga TOTALE o in coda; assegna l'ID progressivo.
+    Restituisce (numero di riga, ID). Solleva ValueError se ci sono colonne sconosciute."""
     hdr = _headers(ws)
-    data = json.loads(a.json)
+    data = dict(data)
     unknown = [k for k in data if k not in hdr]
     if unknown:
-        sys.exit(f"Colonne sconosciute {unknown}. Colonne del foglio: {hdr}")
+        raise ValueError(f"Colonne sconosciute {unknown}. Colonne del foglio: {hdr}")
     if "ID" in hdr and _blank(data.get("ID")):
         ids = [_num(r.get("ID")) for r in _rows(ws)]
         ids = [int(i) for i in ids if i is not None]
@@ -405,8 +414,19 @@ def cmd_append(a):
     for col, h in enumerate(hdr, start=1):
         if h in data:
             _put(ws, insert_at, col, h, data[h])
+    return insert_at, data.get("ID")
+
+
+def cmd_append(a):
+    wb = _wb(a.path)
+    if a.sheet not in wb.sheetnames or a.sheet in KV_SHEETS:
+        sys.exit(f"Foglio non valido per append: {a.sheet}")
+    try:
+        riga, nuovo_id = aggiungi(wb[a.sheet], json.loads(a.json))
+    except ValueError as e:
+        sys.exit(str(e))
     _save(wb, a.path, a.oggi)
-    print(json.dumps({"ok": True, "foglio": a.sheet, "riga": insert_at, "ID": data.get("ID")}, ensure_ascii=False))
+    print(json.dumps({"ok": True, "foglio": a.sheet, "riga": riga, "ID": nuovo_id}, ensure_ascii=False))
 
 
 def cmd_update(a):

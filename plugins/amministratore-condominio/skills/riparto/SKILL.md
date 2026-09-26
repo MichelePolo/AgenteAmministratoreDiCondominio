@@ -2,8 +2,8 @@
 name: riparto
 description: >
   Riparto delle spese tra le unità secondo i millesimi: prospetto xlsx (per unità, per spesa,
-  rate) e, dopo approvazione, aggiornamento del Dovuto. Usare per "riparto", "quanto deve
-  ciascuno", "quote", "rendiconto", "rate", "bilancio".
+  rate) e, dopo l'approvazione, registrazione delle rate. Usare per "riparto", "quanto deve
+  ciascuno", "quote", "rendiconto", "rate", "bilancio", "approvato".
 metadata:
   version: "0.3.0"
 ---
@@ -61,16 +61,40 @@ Il prospetto è una **bozza** finché l'assemblea non lo approva: dirlo sempre.
 
 ### 4. Dopo l'approvazione (solo su richiesta esplicita: "approvato", "l'assemblea ha approvato")
 
-1. Rinominare il prospetto togliendo il suffisso `_bozza` (è l'unico caso in cui si rinomina un
-   file in `prospetti/`) e annotare data e riferimento al verbale nel Diario.
-2. Aggiornare il registro riservato, per ogni unità:
-   `registro.py --file registro-riservato.xlsx [--dir <percorso riservato>] update Situazione --where "ID unità=U01" --where "Esercizio=2026" '{"Dovuto": 416.25}'`
-   Se manca la riga dell'unità per quell'esercizio, crearla con `append Situazione`. `Versato` e
-   `Saldo` non si scrivono: li ricalcola `registro.py` dai `Versamenti`.
-   Se il riparto è parziale (es. un lavoro straordinario), **sommare** al Dovuto esistente, non
-   sostituirlo: leggere prima il valore.
-3. Proporre alla skill `scadenze` le date delle rate e alla skill `comunicazioni` l'invio del
-   prospetto ai condomini.
+Chiedere, se non sono già noti:
+- **le date delle rate** decise dall'assemblea, una per ogni colonna `Rata N` del prospetto (una sola
+  data se il prospetto non ha rate). Non inventarle e non proporre date "tipiche";
+- il **riferimento al verbale** (data dell'assemblea);
+- se il prospetto **sostituisce** un prospetto già approvato (tipicamente: il consuntivo sostituisce
+  il preventivo dello stesso esercizio). In quel caso le rate vecchie restano, marcate non valide, e
+  i versamenti già fatti restano imputati.
+
+Poi un solo comando:
+
+```bash
+python3 "${CLAUDE_SKILL_DIR}/scripts/riparto.py" approva --dir "<cartella>" \
+  --prospetto "prospetti/<file>_bozza.xlsx" --scadenze 2026-10-31,2027-01-31,2027-04-30,2027-07-31 \
+  --approvato "<nome>" --verbale "assemblea del 20 settembre 2026" [--esercizio 2026] \
+  [--sostituisce "prospetti/<prospetto approvato>.xlsx"]
+```
+
+Lo script, dopo aver controllato tutto e prima di scrivere qualsiasi cosa:
+1. scrive le rate di ogni unità nel foglio `Rate` del registro riservato (trovato da solo con
+   `Percorso registro riservato`): `Dovuto`, `Saldo` e `Scaduto` di `Situazione` si ricalcolano da lì.
+   Non aggiornare il `Dovuto` a mano;
+2. crea le righe di `Situazione` mancanti per l'esercizio;
+3. aggiunge al foglio `Scadenze` una riga `rata` per data (senza importi per unità: il foglio è
+   pubblico) e una riga di Diario;
+4. per ultimo toglie `_bozza` dal nome del prospetto (è l'unico caso in cui si rinomina un file in
+   `prospetti/`).
+
+Se esce con `"ok": false`, mostrare gli errori così come sono: numero di scadenze diverso dalle
+rate, date non in ordine, prospetto già approvato. Non aggirarli. Se `dovuti_precedenti_riportati`
+non è vuoto, dire che il dovuto scritto prima della 0.4 per quelle unità è stato conservato come
+"rata 0" senza scadenza.
+
+Infine proporre alla skill `scadenze` di mettere in calendario le righe in `scadenze_create` e alla
+skill `comunicazioni` l'invio del prospetto approvato ai condomini.
 
 ## Regole
 
