@@ -1,7 +1,8 @@
 # Tutorial — dal primo avvio al primo riparto
 
 Tempo: 30 minuti la prima volta. Serve: Claude Code oppure Claude Desktop con Cowork, Google Drive
-per desktop, un account Google con Gmail e Calendar.
+per desktop, un account Google con Gmail e Calendar, Python 3 con `openpyxl` (il setup lo controlla
+e dice come installarlo).
 
 ## 0. Prima di iniziare
 
@@ -55,8 +56,11 @@ non ha l'ascensore, lascia `Tab C` a zero.
 I condomini ora vedono l'archivio, il registro e il `LEGGIMI.txt`, e possono caricare documenti.
 
 **Dal cellulare**: con l'app Google Drive un condomino apre la cartella condivisa e tocca
-`registro-condominio.xlsx` o un prospetto: l'anteprima mostra i fogli (`Spese`, `Scadenze`,
-`Diario`…) senza bisogno di Excel. I file non contengono formule, quindi i totali e i saldi si
+`registro-condominio.xlsx`: si apre sul foglio **In breve**, che in una schermata dice la prossima
+assemblea, la prossima rata, le spese dell'anno per tabella, gli ultimi documenti archiviati e
+quanti documenti caricati aspettano di essere archiviati. Gli altri fogli (`Spese`, `Scadenze`,
+`Diario`…) e i prospetti si aprono allo stesso modo, senza bisogno di Excel. `In breve` si
+aggiorna da solo a ogni operazione e non contiene dati delle singole unità. I file non contengono formule, quindi i totali e i saldi si
 vedono sempre. Per caricare una bolletta dal telefono: `da analizzare/` → `+` → *Carica*, o una
 foto scattata al momento.
 
@@ -85,8 +89,15 @@ servizi come luce scale e pulizie, 0% per lavori straordinari). Il proprietario 
 verso il condominio; con "manda la nota al conduttore dell'interno 2" l'inquilino riceve la sua
 parte per informazione.
 
-Il prospetto è una bozza finché l'assemblea non lo approva; quando succede, dillo ("l'assemblea
-ha approvato") e l'assistente toglie il suffisso e aggiorna il dovuto di ogni unità.
+Il prospetto è una bozza finché l'assemblea non lo approva. Quando succede, dillo con le date delle
+rate decise in assemblea:
+
+> l'assemblea del 20 settembre ha approvato il riparto, rate il 31 ottobre, 31 gennaio, 30 aprile e 31 luglio
+
+L'assistente registra le rate di ogni unità nel registro riservato (da lì si calcolano dovuto,
+saldo e rate scadute), aggiunge le date al foglio `Scadenze`, toglie `_bozza` dal nome del prospetto
+e annota tutto nel Diario. Se poi approvi il consuntivo che sostituisce il preventivo, dillo ("il
+consuntivo sostituisce il preventivo"): le rate vecchie restano, marcate come non più valide.
 
 ## 6. Convocazione dell'assemblea (in modalità collaudo)
 
@@ -109,22 +120,54 @@ Da quel momento le email vanno ai condomini, sempre e solo dopo il tuo "sì".
 
 Il foglio `Scadenze` e Google Calendar restano allineati; rilanciare il comando non crea doppioni.
 
+## 8. Versamenti ed estratto conto
+
+Scarica l'estratto conto del condominio in PDF dall'home banking e mettilo nella cartella del
+registro riservato, sottocartella `estratti conto/`: **non** in quella condivisa, perché contiene
+nomi e IBAN di tutti. Poi:
+
+> registra i bonifici dell'estratto conto di settembre
+
+L'assistente legge i bonifici in entrata e propone per ciascuno l'unità e la rata, con il motivo
+(nome dell'ordinante, interno nella causale, importo uguale alla rata). Quelli dubbi (un cognome
+solo, due omonimi, un familiare che paga per un altro) restano "da abbinare": di' tu a chi vanno
+("la 3 è l'interno 3"). Dopo la tua conferma li registra; rilanciare lo stesso estratto non crea
+doppioni. Per un pagamento singolo basta: "registra 150 € dall'interno 3, bonifico del 10 settembre".
+
+## 9. La situazione di ciascuno
+
+> manda a tutti la situazione
+
+Ogni condomino riceve un'email solo con i propri conti: dovuto, versato, rate con lo stato
+(pagata, da pagare, scaduta), versamenti registrati e IBAN. Vedi la prima email per intero e una
+tabella di tutte, poi confermi una volta. In modalità collaudo parte una sola email, a te.
+
 ## Ogni settimana
 
-1. "archivia i documenti": svuota l'inbox dei condomini.
-2. "cosa scade nelle prossime settimane"
-3. Quando arriva un bonifico: "registra un versamento di 150 € dall'interno 3, rata 2". Il saldo
-   dell'unità si aggiorna da solo nel registro riservato.
+1. "come siamo messi?": in cinque righe documenti da archiviare, scadenze, assemblea, rate
+   scadute e le tre cose da fare adesso, in ordine di urgenza. Rispondi "fai la 1".
+2. "archivia i documenti": svuota l'inbox dei condomini.
+3. "registra i bonifici dell'estratto conto": il saldo e le rate scadute di ogni unità si
+   aggiornano da soli nel registro riservato. Prima di sollecitare qualcuno, registra sempre i
+   bonifici arrivati: si sollecita solo chi ha rate scadute non pagate.
 
 ## Se qualcosa non torna
 
 - *"Non trovo registro-condominio.xlsx"*: la cartella di lavoro non è quella del condominio.
   Cambiala (Cowork: *Project or folder*; Claude Code: riavvia dentro la cartella giusta).
-- *"openpyxl non installato"*: scrivi "installa openpyxl" e riprova.
+- *"openpyxl non installato"*: scrivi "installa openpyxl". Su Linux, se `pip` non c'è o risponde
+  `externally-managed-environment`, l'assistente ti chiederà di eseguire tu
+  `sudo apt install python3-openpyxl` (serve la password).
 - *"Tab B somma a 990"*: correggi i millesimi nel registro; il riparto non parte finché non quadra.
 - *"Spesa 7: manca la Tabella"*: assegna la tabella a quella spesa ("la spesa 7 è tabella B").
-- *"Manca la colonna Email conduttore"*: il registro è di una versione precedente. Scrivi
-  "aggiorna lo schema del registro": le colonne nuove vengono aggiunte senza toccare i dati.
+- *"Manca la colonna Email conduttore"*, oppure il registro non si apre su *In breve*: il registro è
+  di una versione precedente. Scrivi "aggiorna lo schema del registro" (per entrambi i registri):
+  fogli e colonne nuove (`In breve`, `Rate`, `Scaduto`…) vengono aggiunti senza toccare i dati. Il
+  dovuto scritto con la versione 0.3 viene conservato alla prima approvazione con le rate.
+- *Un bonifico resta "da abbinare"*: è voluto quando gli indizi sono deboli o due unità sono
+  possibili. Di' a quale unità va; meglio una domanda in più che un versamento sulla persona sbagliata.
+- *"Scaduto" è vuoto per un'unità*: l'unità non ha rate registrate (riparto approvato prima della
+  0.4). Si riempie dalla prossima approvazione con le date delle rate.
 - *Le email non partono / il calendario non si aggiorna*: il connettore non è collegato. Vedi il
   passo 0 e `skills/condominio-setup/references/connettori.md`.
 - *Un condomino vede totali vuoti dal telefono*: il file è stato salvato con formule da un altro

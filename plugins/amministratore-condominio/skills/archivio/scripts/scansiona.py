@@ -16,7 +16,7 @@ import sys
 try:
     import openpyxl
 except ImportError:
-    sys.exit("openpyxl non installato: pip install openpyxl")
+    sys.exit("openpyxl non installato. Installarlo con: python3 -m pip install openpyxl (Windows: py -m pip install openpyxl; Linux con errore 'externally-managed-environment': sudo apt install python3-openpyxl)")
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "condominio-base", "scripts"))
 from registro import INBOX, da_ignorare  # stesse regole del conteggio "documenti in attesa" del foglio In breve

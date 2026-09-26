@@ -22,7 +22,9 @@ try:
     import openpyxl
     import registro as reg
 except ImportError as e:  # pragma: no cover
-    sys.exit(f"Impossibile caricare openpyxl o registro.py ({e}): pip install openpyxl; plugin installato per intero?")
+    if e.name == "openpyxl":
+        sys.exit("openpyxl non installato. Installarlo con: python3 -m pip install openpyxl (Windows: py -m pip install openpyxl; Linux con errore 'externally-managed-environment': sudo apt install python3-openpyxl)")
+    sys.exit(f"registro.py non trovato ({e}): il plugin è installato in modo incompleto")
 
 GIORNI_PROSSIME = 30
 GIORNI_RENDICONTO = 180   # art. 1130 n. 10 c.c.: assemblea per il rendiconto entro 180 giorni dalla chiusura

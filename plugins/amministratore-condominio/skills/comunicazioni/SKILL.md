@@ -5,7 +5,7 @@ description: >
   solleciti e la situazione personale di ogni condomino. Usare per "convoca l'assemblea",
   "avviso", "sollecita", "invia il riparto", "manda a tutti la situazione".
 metadata:
-  version: "0.3.0"
+  version: "0.4.0"
 ---
 
 # Comunicazioni

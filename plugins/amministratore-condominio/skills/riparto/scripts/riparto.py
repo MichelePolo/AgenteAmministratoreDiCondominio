@@ -44,7 +44,7 @@ try:
     from openpyxl.styles import Font, PatternFill
     from openpyxl.utils import get_column_letter
 except ImportError:
-    sys.exit("openpyxl non installato: pip install openpyxl")
+    sys.exit("openpyxl non installato. Installarlo con: python3 -m pip install openpyxl (Windows: py -m pip install openpyxl; Linux con errore 'externally-managed-environment': sudo apt install python3-openpyxl)")
 
 BASE_SCRIPTS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "condominio-base", "scripts")
 

@@ -22,7 +22,7 @@ I registri NON contengono formule: i valori derivati (riga TOTALE dei millesimi,
 Saldo e Scaduto del foglio Situazione) vengono ricalcolati e scritti da questo strumento a ogni lettura e a ogni
 scrittura. Così il file si legge correttamente anche dall'anteprima di Google Drive su cellulare,
 che mostra solo i valori salvati nel file.
-Richiede openpyxl (pip install openpyxl).
+Richiede openpyxl (python3 -m pip install openpyxl).
 """
 import argparse
 import datetime as dt
@@ -36,7 +36,7 @@ try:
     from openpyxl.styles import Alignment, Font, PatternFill
     from openpyxl.utils import get_column_letter
 except ImportError:  # pragma: no cover
-    sys.exit("openpyxl non installato: pip install openpyxl")
+    sys.exit("openpyxl non installato. Installarlo con: python3 -m pip install openpyxl (Windows: py -m pip install openpyxl; Linux con errore 'externally-managed-environment': sudo apt install python3-openpyxl)")
 
 DEFAULT_FILE = "registro-condominio.xlsx"
 KV_SHEETS = {"Condominio"}

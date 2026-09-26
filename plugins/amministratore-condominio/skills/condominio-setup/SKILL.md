@@ -5,7 +5,7 @@ description: >
   anagrafica e tabelle millesimali. Usare per "configura il condominio", "iniziamo",
   "nuovo condominio", "setup", o se manca registro-condominio.xlsx.
 metadata:
-  version: "0.3.0"
+  version: "0.4.0"
 ---
 
 # Setup del condominio
@@ -30,7 +30,12 @@ Impostazioni → Connettori; Claude Code: collegarli su claude.ai, poi riavviare
 scadenze in calendario ne hanno bisogno. Annotare l'esito ("Gmail: sì, Calendar: no") nel Diario a
 fine setup.
 
-Verificare anche Python: `python3 -c "import openpyxl"`; se manca, `pip install openpyxl`.
+Verificare anche Python: `python3 -c "import openpyxl"`. Se manca, installarlo con
+`python3 -m pip install openpyxl` (Windows: `py -m pip install openpyxl`). Su Linux, se `pip` non
+esiste o l'installazione fallisce con `externally-managed-environment`, usare il pacchetto del
+sistema: `sudo apt install python3-openpyxl` (Debian, Ubuntu) o `sudo dnf install python3-openpyxl`
+(Fedora); chiedere all'utente di eseguirlo lui, perché serve la password. Su Mac, se `python3`
+manca, il sistema propone di installare gli strumenti da riga di comando: accettare.
 
 ## Fase 1 — Struttura
 

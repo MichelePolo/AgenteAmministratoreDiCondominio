@@ -5,7 +5,7 @@ description: >
   abbinandoli a unità e rate. Usare per "registra un versamento", "ha pagato", "bonifico",
   "estratto conto della banca", "chi ha pagato".
 metadata:
-  version: "0.3.0"
+  version: "0.4.0"
 ---
 
 # Versamenti

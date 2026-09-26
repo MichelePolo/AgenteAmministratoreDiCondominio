@@ -5,7 +5,7 @@ description: >
   prepara, l'umano approva), privacy, codice civile. Usare sempre se si parla di condominio,
   condomini, millesimi, spese comuni, assemblea, riparto, morosità.
 metadata:
-  version: "0.3.0"
+  version: "0.4.0"
 ---
 
 # Condominio — base comune
@@ -75,7 +75,7 @@ Se la cartella di lavoro non contiene `registro-condominio.xlsx`, fermarsi e pro
 Ogni skill del plugin ha i propri script in `scripts/`. Il percorso della skill in esecuzione è
 `${CLAUDE_SKILL_DIR}`; le altre skill del plugin stanno accanto: `${CLAUDE_SKILL_DIR}/../<nome-skill>`.
 Se l'ambiente non espande la variabile, usare il percorso reale della cartella che contiene il
-`SKILL.md` letto. Serve Python 3 con `openpyxl` (`pip install openpyxl` se manca).
+`SKILL.md` letto. Serve Python 3 con `openpyxl` (se manca, vedi `condominio-setup`, fase 0).
 
 ## Leggere e scrivere il registro
 
