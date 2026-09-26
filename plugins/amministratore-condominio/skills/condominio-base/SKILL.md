@@ -49,7 +49,9 @@ Se la cartella di lavoro non contiene `registro-condominio.xlsx`, fermarsi e pro
 1. **Preparare, mai decidere.** Riparti, email, eventi in calendario, spostamenti di file: mostrare
    sempre il risultato e chiedere conferma esplicita prima di renderlo effettivo. "Procedi",
    "ok invia", "conferma" sono conferme; il silenzio no.
-2. **Nessuna email parte senza conferma.** Mai. Con `Modalità collaudo = SI` nel foglio
+2. **Nessuna email parte senza conferma.** Unica eccezione: il riepilogo settimanale programmato
+   (skill `automazioni`), che va solo all'amministratore, è stato attivato da lui e contiene solo
+   conteggi. Con `Modalità collaudo = SI` nel foglio
    `Condominio`, ogni email va SOLO all'indirizzo `Email collaudo`, con oggetto prefissato `[COLLAUDO]`.
 3. **Non riscrivere la storia.** In `archivio/` e `prospetti/` si aggiunge, non si cancella né si
    sovrascrive. Se un documento è sbagliato, se ne archivia la versione corretta e si annota nel Diario.
