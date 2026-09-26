@@ -32,6 +32,10 @@ in `references/modelli.md`.
    amministratore. Allegati: i file di `prospetti/` o `archivio/` indicati dall'utente.
 7. **Diario**: `registro.py diario "Inviata <tipo> a N destinatari" --dettaglio "<oggetto>" --approvato "<nome>"`.
    Salvare una copia del testo in `archivio/<anno>/comunicazioni/<data>_comunicazione_<oggetto>.md`.
+   **Comunicazioni personali** (sollecito, nota al conduttore, situazione personale): il Diario è
+   pubblico e l'archivio è condiviso, quindi nel Diario solo tipo e numero
+   (`diario "Inviati 2 solleciti"`, senza `--dettaglio` né oggetto, che contiene l'interno) e la
+   copia del testo in `<cartella riservata>/comunicazioni/`, mai in `archivio/`.
 
 Se il connettore Gmail non è disponibile: preparare comunque il testo, salvarlo in
 `archivio/<anno>/comunicazioni/` e dire all'utente di inviarlo dal proprio client, indicando come
@@ -66,10 +70,15 @@ conferma che è la versione firmata/definitiva.
 
 ### Sollecito di pagamento (una unità per volta)
 
-Leggere da `registro-riservato.xlsx` (`Percorso registro riservato` se valorizzato):
-`registro.py --file registro-riservato.xlsx read Situazione --where "ID unità=<id>"` (Dovuto, Versato,
-Saldo, Livello sollecito, Ultimo sollecito: valori già calcolati) e `read Versamenti --where "ID unità=<id>"`.
-Se il saldo è ≤ 0, fermarsi: non c'è nulla da sollecitare.
+Leggere la situazione dell'unità dal registro riservato (`Percorso registro riservato` se valorizzato):
+`registro.py --file registro-riservato.xlsx situazione --unita <id>`: dovuto, versato, saldo,
+**scaduto**, rate con stato, versamenti, livello e data dell'ultimo sollecito, già calcolati.
+
+Si sollecita **lo scaduto, non il saldo**: chi ha pagato tutte le rate già scadute è in regola
+anche se deve ancora le prossime. Se `Scaduto` è 0, fermarsi: non c'è nulla da sollecitare. Nel
+testo, l'importo è lo `Scaduto` e si elencano le rate con stato `scaduta` (numero, scadenza,
+parte non pagata). Se `Scaduto` è vuoto (registro senza rate, precedente alla 0.4) usare il
+`Saldo` e dire all'utente che senza le date delle rate non si può distinguere il ritardo.
 
 Livelli, con testo da `references/modelli.md`:
 1. **cortese** — prima volta, tono neutro, IBAN e importo;
@@ -79,8 +88,8 @@ Livelli, con testo da `references/modelli.md`:
 
 Nel testo: solo i dati di quella unità. Mai il confronto con altri condomini. Dopo l'invio:
 `update Situazione --where "ID unità=<id>" --where "Esercizio=<anno>" '{"Ultimo sollecito":"<oggi>","Livello sollecito":<n>}'`
-e `append Solleciti`. Quando l'utente comunica un bonifico ricevuto: `append Versamenti` con
-`ID unità`, `Data`, `Importo`, `Esercizio`, `Rata`; il saldo si aggiorna da solo. Con profilo `autogestione`, ricordare che dopo 6 mesi di morosità
+e `append Solleciti`. Prima di sollecitare, chiedere se ci sono bonifici arrivati e non ancora
+registrati: si registrano con la skill `versamenti`. Con profilo `autogestione`, ricordare che dopo 6 mesi di morosità
 l'amministratore deve attivarsi per il recupero (art. 1129 co. 9 c.c.) e che conviene parlare
 con la persona prima del secondo sollecito.
 

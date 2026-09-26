@@ -113,6 +113,9 @@ perché non classificabile, dirlo esplicitamente e chiedere all'utente cosa sia.
 - Mai cancellare: i duplicati si spostano.
 - Mai registrare una spesa senza `File` valorizzato (tranne spese inserite a mano dall'utente).
 - Importi: usare il totale del documento. Se ci sono più importi (acconto/saldo), chiedere.
+- **Estratti conto bancari** del condominio (movimenti con nomi, IBAN e causali dei condomini):
+  non archiviarli nella cartella condivisa. Proporre di spostarli in `<cartella riservata>/estratti
+  conto/` (la cartella di `registro-riservato.xlsx`) e di passarli alla skill `versamenti`.
 - Non aprire né archiviare documenti che contengono evidentemente dati sensibili di terzi non
   pertinenti (documenti d'identità, referti): lasciarli in `da analizzare/` e avvisare l'utente.
 - Con profilo `autogestione`, spiegare brevemente perché una spesa va in una tabella piuttosto

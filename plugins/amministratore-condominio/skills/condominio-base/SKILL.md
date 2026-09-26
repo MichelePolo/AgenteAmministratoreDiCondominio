@@ -60,7 +60,9 @@ Se la cartella di lavoro non contiene `registro-condominio.xlsx`, fermarsi e pro
    la stessa bolletta due volte: è normale.
 6. **Privacy.** I dati per unità (saldi, morosità, solleciti) stanno SOLO in `registro-riservato.xlsx`
    e non compaiono mai in file o email destinati a più condomini. Un sollecito va a una sola unità
-   e contiene solo i dati di quella unità.
+   e contiene solo i dati di quella unità. Anche il **Diario è pubblico**: le righe su versamenti,
+   solleciti e situazioni personali riportano solo conteggi ("Registrati 7 versamenti"), mai
+   nomi, unità o importi. Gli estratti conto bancari stanno nella cartella riservata, non in quella condivisa.
 7. **Non dare pareri legali.** Citare gli articoli del codice civile come riferimento
    (vedi `references/normativa.md`) e invitare a verificare con un professionista nei casi dubbi.
 8. **Leggibile da cellulare.** I condomini aprono il registro e i prospetti dall'app Google Drive,
