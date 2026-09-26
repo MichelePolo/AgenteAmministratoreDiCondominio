@@ -74,8 +74,9 @@ Cordiali saluti,
 ```
 Gentile {Intestatario},
 
-dal registro risulta per l'unità interno {Interno} un saldo da versare di {Saldo} €
-relativo a {esercizio} ({dettaglio: rata n. X scaduta il … / conguaglio …}).
+dal registro risulta per l'unità interno {Interno} un importo scaduto e non ancora
+versato di {Scaduto} € relativo a {esercizio}:
+{per ogni rata scaduta: - rata {n}, scaduta il {data}: {parte non pagata} €}
 
 Se il pagamento è già stato disposto, la prego di non considerare questo messaggio
 e, se possibile, di inviarmi gli estremi del bonifico.
@@ -97,7 +98,7 @@ Cordiali saluti,
 Gentile {Intestatario},
 
 faccio seguito alla comunicazione del {data primo sollecito} per ricordarle che
-risulta ancora da versare l'importo di {Saldo} € per le quote condominiali
+risulta ancora da versare l'importo scaduto di {Scaduto} € per le quote condominiali
 {esercizio} relative all'unità interno {Interno}, come da riparto approvato
 dall'assemblea del {data assemblea}.
 
@@ -119,6 +120,45 @@ Preparare solo la bozza con: riferimenti ai solleciti precedenti, importo, termi
 avvertimento che in mancanza si procederà al recupero del credito nelle forme di legge.
 Scrivere all'utente che il testo va verificato da un legale prima dell'invio e proporre
 raccomandata A/R o PEC, non email ordinaria.
+
+## Situazione personale
+
+Il testo lo compone `scripts/situazione_personale.py` (numeri da `registro.py situazione`), da
+inviare così com'è. Struttura, per riferimento:
+
+**Oggetto:** {Nome condominio} — situazione quote {esercizio} — interno {Interno}
+
+```
+Gentile {Intestatario},
+
+le invio il riepilogo delle quote condominiali {esercizio} per l'unità interno {Interno},
+aggiornato al {data}.
+
+Dovuto per l'esercizio: {Dovuto} €
+Versato finora: {Versato} €
+Resta da versare: {Saldo} €        (oppure: Credito a Suo favore / interamente versate)
+
+Rate:
+- Rata 1 · 31 luglio 2026 · 177,32 € · scaduta (versati 150,25 €)
+- Rata 2 · 31 ottobre 2026 · 177,31 € · da pagare
+
+{se Scaduto > 0: Di quanto resta da versare, {Scaduto} € riguardano rate con scadenza già passata.}
+
+Versamenti registrati:
+- 12 settembre 2026 · 150,25 €
+
+{se resta da versare: Coordinate per il versamento: IBAN, intestatario, causale}
+
+Se nota un errore, o un versamento che non compare, mi risponda a questa email:
+lo verifichiamo insieme.
+
+Cordiali saluti,
+{Amministratore}
+amministratore del {Nome condominio}
+```
+
+Righe con separatori `·`, non colonne allineate con spazi: nei client di posta il carattere è
+proporzionale e l'allineamento si perde.
 
 ## Nota al conduttore
 

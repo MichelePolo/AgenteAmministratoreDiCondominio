@@ -1,9 +1,9 @@
 ---
 name: comunicazioni
 description: >
-  Prepara e, solo dopo conferma, invia via Gmail convocazioni, avvisi, prospetti, verbali e
-  solleciti di pagamento; bozza di verbale. Usare per "convoca l'assemblea", "manda un
-  avviso", "sollecita", "invia il riparto", "email ai condomini".
+  Prepara e, dopo conferma, invia via Gmail convocazioni, avvisi, prospetti, verbali,
+  solleciti e la situazione personale di ogni condomino. Usare per "convoca l'assemblea",
+  "avviso", "sollecita", "invia il riparto", "manda a tutti la situazione".
 metadata:
   version: "0.3.0"
 ---
@@ -38,7 +38,7 @@ in `references/modelli.md`.
    copia del testo in `<cartella riservata>/comunicazioni/`, mai in `archivio/`.
 
 Se il connettore Gmail non è disponibile: preparare comunque il testo, salvarlo in
-`archivio/<anno>/comunicazioni/` e dire all'utente di inviarlo dal proprio client, indicando come
+`archivio/<anno>/comunicazioni/` (le comunicazioni personali nella cartella riservata) e dire all'utente di inviarlo dal proprio client, indicando come
 collegare il connettore (`condominio-setup`, fase 0).
 
 ## Tipi
@@ -92,6 +92,34 @@ e `append Solleciti`. Prima di sollecitare, chiedere se ci sono bonifici arrivat
 registrati: si registrano con la skill `versamenti`. Con profilo `autogestione`, ricordare che dopo 6 mesi di morosità
 l'amministratore deve attivarsi per il recupero (art. 1129 co. 9 c.c.) e che conviene parlare
 con la persona prima del secondo sollecito.
+
+### Situazione personale (una email per unità)
+
+Ogni condomino riceve i propri conti: dovuto, versato, saldo, rate con stato, versamenti
+registrati, IBAN. Non è un sollecito: tono informativo, nessun aggiornamento di `Solleciti`.
+Da non confondere con l'estratto conto della banca (skill `versamenti`). Utile dopo
+l'approvazione di un riparto, prima di una scadenza di rata, o su richiesta di un condomino.
+
+1. Chiedere se ci sono bonifici non ancora registrati: vanno registrati prima (skill
+   `versamenti`), altrimenti le email diranno che mancano pagamenti già fatti.
+2. Comporre i testi con lo script: **non** scriverli né ricalcolarli a mano.
+   ```bash
+   python3 "${CLAUDE_SKILL_DIR}/scripts/situazione_personale.py" --dir "<cartella>" [--unita U01,U03]
+   ```
+   Restituisce `messaggi` (destinatario, oggetto, corpo, numeri), `senza_email`,
+   `senza_situazione` e `avvisi` (per esempio IBAN mancante).
+3. **Conferma unica**: mostrare il testo integrale della **prima** email e una tabella di tutte
+   (interno, intestatario, destinatario, saldo, scaduto), più le unità senza email. Il testo è lo
+   stesso per tutti e cambiano solo i numeri, visibili nella tabella: un solo "sì" copre l'invio.
+4. **Invio**: un'email per unità, `To` = email dell'intestatario, **nessun Cc né Bcc**: mai
+   insieme ad altri condomini, mai al conduttore (i conti verso il condominio sono del
+   proprietario). Testo e oggetto esattamente come restituiti dallo script.
+5. **Collaudo** (`collaudo: true`): inviare **una sola** email, la prima, all'indirizzo di
+   collaudo con il prefisso `[COLLAUDO]` e la riga `Destinatari reali: <elenco>`; elencare le altre
+   senza inviarle. Non si mandano N email a sé stessi.
+6. **Dopo l'invio**: rilanciare lo script con `--salva` (stessa data) per conservare le copie in
+   `<cartella riservata>/comunicazioni/`; per le unità senza email, gli stessi file servono per la
+   consegna a mano. Diario: `diario "Inviate N situazioni personali"`, senza dettaglio.
 
 ### Nota al conduttore (solo su richiesta esplicita)
 
