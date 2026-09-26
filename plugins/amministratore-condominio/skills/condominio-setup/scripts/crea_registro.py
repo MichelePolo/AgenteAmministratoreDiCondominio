@@ -31,8 +31,8 @@ HDR_FILL = PatternFill("solid", fgColor="DDE7F0")
 INPUT_FILL = PatternFill("solid", fgColor="FFF8DC")
 FMT_EURO = "#,##0.00 €"
 FMT_DATE = "yyyy-mm-dd"
-COL_IMPORTI = {"Importo", "Quota", "Dovuto", "Versato", "Saldo"}
-COL_DATE = {"Data", "Data pagamento", "Ultimo sollecito", "Data elaborazione"}
+COL_IMPORTI = {"Importo", "Quota", "Dovuto", "Versato", "Saldo", "Scaduto"}
+COL_DATE = {"Data", "Data pagamento", "Ultimo sollecito", "Data elaborazione", "Scadenza"}
 
 FOLDERS = ["da analizzare", "prospetti"] + [
     f"archivio/{{anno}}/{s}" for s in ("fatture", "preventivi", "verbali", "comunicazioni", "contratti", "altro", "altro/duplicati")
@@ -137,23 +137,27 @@ def crea_riservato(path, esercizio, esempio):
     wb = Workbook()
     ws = wb.active
     ws.title = "Situazione"
-    hdr = ["ID unità", "Intestatario", "Esercizio", "Dovuto", "Versato", "Saldo", "Ultimo sollecito", "Livello sollecito", "Note"]
+    hdr = ["ID unità", "Intestatario", "Esercizio", "Dovuto", "Versato", "Saldo", "Ultimo sollecito", "Livello sollecito", "Note", "Scaduto"]
     ws.append(hdr)
     for c in ws[1]:
         c.font = Font(name=FONT, bold=True); c.fill = HDR_FILL
     ws.freeze_panes = "A2"
-    ws["A1"].comment = Comment("Dovuto: aggiornato dopo l'approvazione di un prospetto. Versato e Saldo: ricalcolati da "
-                               "registro.py dai Versamenti (Saldo > 0 = deve ancora versare). "
+    ws["A1"].comment = Comment("Dovuto: somma delle rate valide del foglio Rate (scritte all'approvazione di un prospetto). "
+                               "Versato, Saldo e Scaduto: ricalcolati da registro.py dai Versamenti (Saldo > 0 = deve ancora "
+                               "versare; Scaduto = rate con scadenza passata non ancora coperte). "
                                "Livello sollecito: 0 nessuno, 1 cortese, 2 formale, 3 diffida.", "amministratore-condominio")
-    ve_h = ["ID", "Data", "ID unità", "Importo", "Esercizio", "Riferimento", "Rata", "Note"]
+    ve_h = ["ID", "Data", "ID unità", "Importo", "Esercizio", "Riferimento", "Rata", "Note", "ID movimento"]
     ve = _sheet(wb, "Versamenti", ve_h, {"Riferimento": 30, "Note": 30})
     _sheet(wb, "Solleciti", ["ID", "Data", "ID unità", "Livello", "Inviato a", "Canale", "Esito", "Note"], {"Inviato a": 30, "Note": 30})
+    ra = _sheet(wb, "Rate", ["ID unità", "Esercizio", "Prospetto", "Rata", "Scadenza", "Importo", "Valida", "Note"], {"Prospetto": 50, "Note": 30})
+    ra["A1"].comment = Comment("Una riga per unità e rata di ogni prospetto approvato, scritta da riparto.py approva. "
+                               "Valida = NO se il prospetto è stato sostituito (mai cancellare).", "amministratore-condominio")
     unita = [("U01", "Mario Rossi"), ("U02", "Anna Bianchi"), ("U03", "Luca Verdi"), ("U04", "Giulia Neri")] if esempio else []
-    versamenti = [(1, dt.date(esercizio, 1, 15), "U01", 150.00, esercizio, "bonifico rata 1", 1, "esempio"),
-                  (2, dt.date(esercizio, 1, 16), "U02", 150.00, esercizio, "bonifico rata 1", 1, "esempio")] if esempio else []
+    versamenti = [(1, dt.date(esercizio, 1, 15), "U01", 150.00, esercizio, "bonifico rata 1", 1, "esempio", None),
+                  (2, dt.date(esercizio, 1, 16), "U02", 150.00, esercizio, "bonifico rata 1", 1, "esempio", None)] if esempio else []
     for uid, nome in unita:
         versato = round(sum(v[3] for v in versamenti if v[2] == uid), 2)
-        _row(ws, hdr, [uid, nome, esercizio, 0, versato, round(0 - versato, 2), None, 0, ""])
+        _row(ws, hdr, [uid, nome, esercizio, 0, versato, round(0 - versato, 2), None, 0, "", None])
     for v in versamenti:
         _row(ve, ve_h, list(v))
     for i, h in enumerate(hdr, start=1):

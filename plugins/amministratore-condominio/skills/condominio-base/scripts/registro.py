@@ -12,11 +12,14 @@ Uso (dalla cartella del condominio, oppure con --dir <cartella>):
   registro.py verifica                                  # millesimi a 1000, anagrafica, spese senza tabella…
                                                         # (riscrive anche TOTALE/Versato/Saldo dopo modifiche a mano)
   registro.py schema                                    # aggiunge fogli/colonne/chiavi mancanti (aggiornamento registri)
+  registro.py --file registro-riservato.xlsx situazione [--unita U01] [--esercizio 2026]
+                                                        # per unità: dovuto, versato, saldo, scaduto, stato delle rate
 
-Opzioni comuni: --file registro-riservato.xlsx (default registro-condominio.xlsx), --dir <cartella>
+Opzioni comuni: --file registro-riservato.xlsx (default registro-condominio.xlsx), --dir <cartella>,
+--oggi AAAA-MM-GG (data di riferimento per rate e scaduto; default oggi, utile per le prove)
 
-I registri NON contengono formule: i valori derivati (riga TOTALE dei millesimi, Versato e Saldo
-del foglio Situazione) vengono ricalcolati e scritti da questo strumento a ogni lettura e a ogni
+I registri NON contengono formule: i valori derivati (riga TOTALE dei millesimi, Dovuto, Versato,
+Saldo e Scaduto del foglio Situazione) vengono ricalcolati e scritti da questo strumento a ogni lettura e a ogni
 scrittura. Così il file si legge correttamente anche dall'anteprima di Google Drive su cellulare,
 che mostra solo i valori salvati nel file.
 Richiede openpyxl (pip install openpyxl).
@@ -41,8 +44,8 @@ FONT = "Arial"
 FMT_EURO = "#,##0.00 €"
 FMT_DATE = "yyyy-mm-dd"
 CENT = Decimal("0.01")
-COL_IMPORTI = {"importo", "quota", "dovuto", "versato", "saldo"}
-COL_DATE = {"data", "data pagamento", "ultimo sollecito", "data elaborazione"}
+COL_IMPORTI = {"importo", "quota", "dovuto", "versato", "saldo", "scaduto"}
+COL_DATE = {"data", "data pagamento", "ultimo sollecito", "data elaborazione", "scadenza"}
 COL_INT = {"esercizio", "piano", "id spesa", "livello", "livello sollecito", "id", "rata",
            "esercizio corrente", "numero unità"}
 COL_PCT = {"quota conduttore %"}
@@ -66,9 +69,10 @@ SCHEMA = {
     },
     "registro-riservato.xlsx": {
         "Situazione": ["ID unità", "Intestatario", "Esercizio", "Dovuto", "Versato", "Saldo", "Ultimo sollecito",
-                       "Livello sollecito", "Note"],
-        "Versamenti": ["ID", "Data", "ID unità", "Importo", "Esercizio", "Riferimento", "Rata", "Note"],
+                       "Livello sollecito", "Note", "Scaduto"],
+        "Versamenti": ["ID", "Data", "ID unità", "Importo", "Esercizio", "Riferimento", "Rata", "Note", "ID movimento"],
         "Solleciti": ["ID", "Data", "ID unità", "Livello", "Inviato a", "Canale", "Esito", "Note"],
+        "Rate": ["ID unità", "Esercizio", "Prospetto", "Rata", "Scadenza", "Importo", "Valida", "Note"],
     },
 }
 
@@ -210,8 +214,69 @@ def _esercizio_di(vers):
     return None
 
 
-def _refresh(wb):
+def _as_date(v):
+    if isinstance(v, dt.datetime):
+        return v.date()
+    if isinstance(v, dt.date):
+        return v
+    try:
+        return dt.date.fromisoformat(str(v).strip()[:10])
+    except ValueError:
+        return None
+
+
+def _stesso_esercizio(es_riga, es):
+    return es is None or es_riga is None or es_riga == es
+
+
+def _conti(wb, uid, es, dovuto_scritto, oggi):
+    """Conti di un'unità per un esercizio (es None = tutti), dal registro riservato.
+
+    Dovuto: somma delle rate valide se l'unità ha righe in `Rate` per l'esercizio, altrimenti il
+    valore scritto (registri 0.3). Versamenti imputati alle rate in ordine di scadenza. Scaduto:
+    None senza rate (non si sa quanto sia in ritardo), altrimenti rate scadute non coperte."""
+    uid = str(uid).strip()
+    vers = [v for v in (_rows(wb["Versamenti"]) if "Versamenti" in wb.sheetnames else [])
+            if str(v.get("ID unità") or "").strip() == uid and _stesso_esercizio(_esercizio_di(v), es)]
+    versato = sum((_num(v.get("Importo")) or Decimal(0) for v in vers), Decimal(0))
+    righe_rate = []
+    if "Rate" in wb.sheetnames:
+        for r in _rows(wb["Rate"]):
+            e = _num(r.get("Esercizio"))
+            if str(r.get("ID unità") or "").strip() == uid and _stesso_esercizio(int(e) if e is not None else None, es):
+                righe_rate.append(r)
+    valide = [r for r in righe_rate if str(r.get("Valida") or "SI").strip().upper() != "NO"]
+    valide.sort(key=lambda r: (_as_date(r.get("Scadenza")) or dt.date.max, str(r.get("Prospetto") or ""), _num(r.get("Rata")) or 0))
+    if righe_rate:
+        dovuto = sum((_num(r.get("Importo")) or Decimal(0) for r in valide), Decimal(0))
+    else:
+        dovuto = _num(dovuto_scritto) or Decimal(0)
+    rate, residuo, scadute = [], versato, Decimal(0)
+    for r in valide:
+        imp = _num(r.get("Importo")) or Decimal(0)
+        pagato = max(Decimal(0), min(imp, residuo))
+        residuo -= pagato
+        scad = _as_date(r.get("Scadenza"))
+        if scad is not None and scad < oggi:
+            scadute += imp
+        if pagato >= imp:
+            stato = "pagata"
+        elif scad is not None and scad < oggi:
+            stato = "scaduta"
+        elif pagato > 0:
+            stato = "parziale"
+        else:
+            stato = "da pagare"
+        rate.append({"Prospetto": r.get("Prospetto"), "Rata": _norm(r.get("Rata")), "Scadenza": _norm(r.get("Scadenza")),
+                     "Importo": _plain(imp), "Pagato": _plain(pagato), "Stato": stato})
+    scaduto = max(Decimal(0), scadute - versato) if righe_rate else None
+    return {"Dovuto": dovuto, "Versato": versato, "Saldo": dovuto - versato, "Scaduto": scaduto,
+            "rate": rate, "versamenti": vers}
+
+
+def _refresh(wb, oggi=None):
     """Ricalcola i valori derivati e li scrive come numeri (mai formule)."""
+    oggi = oggi or dt.date.today()
     for ws in wb.worksheets:
         hdr = _headers(ws)
         tab_cols = [i for i, h in enumerate(hdr, start=1) if isinstance(h, str) and h.startswith("Tab ")]
@@ -227,24 +292,22 @@ def _refresh(wb):
         hdr = _headers(ws)
         if {"ID unità", "Dovuto", "Versato", "Saldo"} <= set(hdr):
             ci = {h: i for i, h in enumerate(hdr, start=1)}
-            vers = _rows(wb["Versamenti"])
             for r in range(2, ws.max_row + 1):
                 uid = ws.cell(r, ci["ID unità"]).value
                 if _blank(uid):
                     continue
                 es = _num(ws.cell(r, ci["Esercizio"]).value) if "Esercizio" in ci else None
-                es = int(es) if es is not None else None
-                versato = Decimal(0)
-                for v in vers:
-                    if str(v.get("ID unità") or "").strip() != str(uid).strip():
-                        continue
-                    ev = _esercizio_di(v)
-                    if es is not None and ev is not None and ev != es:
-                        continue
-                    versato += _num(v.get("Importo")) or Decimal(0)
-                dovuto = _num(ws.cell(r, ci["Dovuto"]).value) or Decimal(0)
-                _put(ws, r, ci["Versato"], "Versato", versato)
-                _put(ws, r, ci["Saldo"], "Saldo", dovuto - versato)
+                c = _conti(wb, uid, int(es) if es is not None else None, ws.cell(r, ci["Dovuto"]).value, oggi)
+                for h in ("Dovuto", "Versato", "Saldo", "Scaduto"):
+                    if h in ci:
+                        _put(ws, r, ci[h], h, c[h])
+
+
+def _save(wb, path, oggi=None):
+    """Unico punto di salvataggio: ricalcola i valori derivati, aggiorna la data di elaborazione, salva."""
+    _refresh(wb, oggi)
+    _touch(wb)
+    wb.save(path)
 
 
 def _cond(cond):
@@ -288,7 +351,7 @@ def _out(obj):
 
 def cmd_info(a):
     wb = _wb(a.path)
-    _refresh(wb)
+    _refresh(wb, a.oggi)
     out = {"file": a.path, "fogli": wb.sheetnames}
     if "Condominio" in wb.sheetnames:
         out["condominio"] = _kv(wb["Condominio"])
@@ -303,7 +366,7 @@ def cmd_read(a):
     wb = _wb(a.path)
     if a.sheet not in wb.sheetnames:
         sys.exit(f"Foglio inesistente: {a.sheet}. Disponibili: {wb.sheetnames}")
-    _refresh(wb)
+    _refresh(wb, a.oggi)
     ws = wb[a.sheet]
     if a.sheet in KV_SHEETS:
         _out(_kv(ws))
@@ -342,9 +405,7 @@ def cmd_append(a):
     for col, h in enumerate(hdr, start=1):
         if h in data:
             _put(ws, insert_at, col, h, data[h])
-    _refresh(wb)
-    _touch(wb)
-    wb.save(a.path)
+    _save(wb, a.path, a.oggi)
     print(json.dumps({"ok": True, "foglio": a.sheet, "riga": insert_at, "ID": data.get("ID")}, ensure_ascii=False))
 
 
@@ -367,9 +428,7 @@ def cmd_update(a):
             for k, v in data.items():
                 _put(ws, r, hdr.index(k) + 1, k, v)
             n += 1
-    _refresh(wb)
-    _touch(wb)
-    wb.save(a.path)
+    _save(wb, a.path, a.oggi)
     print(json.dumps({"ok": True, "righe_aggiornate": n}))
 
 
@@ -382,8 +441,7 @@ def cmd_set(a):
         if row[0].value == a.key:
             row[1].value = _coerce(a.key, a.value)
             row[1].font = Font(name=FONT)
-            _touch(wb)
-            wb.save(a.path)
+            _save(wb, a.path, a.oggi)
             print(json.dumps({"ok": True, a.key: _norm(row[1].value)}, ensure_ascii=False))
             return
     sys.exit(f"Chiave non trovata: {a.key}")
@@ -399,15 +457,12 @@ def cmd_diario(a):
     valori = [dt.datetime.now().isoformat(timespec="seconds"), a.operazione, a.dettaglio or "", a.eseguito, a.approvato or ""]
     for c, (h, v) in enumerate(zip(hdr, valori), start=1):
         _put(ws, r, c, h, v)
-    _touch(wb)
-    wb.save(a.path)
+    _save(wb, a.path, a.oggi)
     print(json.dumps({"ok": True, "riga": r}))
 
 
-def cmd_verifica(a):
-    wb = _wb(a.path)
-    _refresh(wb)
-    wb.save(a.path)  # riscrive i valori derivati: utile dopo modifiche fatte a mano nel foglio
+def verifica(wb):
+    """Controlli di coerenza del registro. Restituisce (problemi bloccanti, avvisi); non scrive nulla."""
     problemi, avvisi = [], []
     ids_a, conduttori = [], []
     if "Anagrafica" in wb.sheetnames:
@@ -476,8 +531,50 @@ def cmd_verifica(a):
         n = _num(kv.get("Numero unità"))
         if n is not None and ids_a and int(n) != len(ids_a):
             avvisi.append(f"'Numero unità' = {int(n)} ma in Anagrafica ci sono {len(ids_a)} unità")
+    return problemi, avvisi
+
+
+def cmd_verifica(a):
+    wb = _wb(a.path)
+    _save(wb, a.path, a.oggi)  # riscrive i valori derivati: utile dopo modifiche fatte a mano nel foglio
+    problemi, avvisi = verifica(wb)
     _out({"ok": not problemi, "problemi": problemi, "avvisi": avvisi})
     sys.exit(0 if not problemi else 1)
+
+
+def situazione(wb, oggi=None, esercizio=None, unita=None):
+    """Situazione per unità dal registro riservato: una voce per riga di `Situazione`, con rate e versamenti."""
+    oggi = oggi or dt.date.today()
+    if "Situazione" not in wb.sheetnames:
+        raise ValueError("foglio Situazione assente: usare --file registro-riservato.xlsx")
+    out = []
+    for r in _rows(wb["Situazione"]):
+        uid = str(r.get("ID unità") or "").strip()
+        es = _num(r.get("Esercizio"))
+        es = int(es) if es is not None else None
+        if not uid or (unita and uid != unita) or (esercizio and es != esercizio):
+            continue
+        c = _conti(wb, uid, es, r.get("Dovuto"), oggi)
+        out.append({
+            "ID unità": uid, "Intestatario": r.get("Intestatario"), "Esercizio": es,
+            "Dovuto": _plain(c["Dovuto"]), "Versato": _plain(c["Versato"]), "Saldo": _plain(c["Saldo"]),
+            "Scaduto": _plain(c["Scaduto"]) if c["Scaduto"] is not None else None,
+            "Livello sollecito": _norm(r.get("Livello sollecito")), "Ultimo sollecito": _norm(r.get("Ultimo sollecito")),
+            "rate": c["rate"],
+            "versamenti": [{k: _norm(v.get(k)) for k in ("Data", "Importo", "Rata", "Riferimento")} for v in c["versamenti"]],
+        })
+    return out
+
+
+def cmd_situazione(a):
+    wb = _wb(a.path)
+    try:
+        dati = situazione(wb, a.oggi, a.esercizio, a.unita)
+    except ValueError as e:
+        sys.exit(str(e))
+    if a.unita and not dati:
+        sys.exit(f"Nessuna riga in Situazione per l'unità {a.unita}")
+    _out({"ok": True, "oggi": a.oggi.isoformat(), "unita": dati})
 
 
 def cmd_schema(a):
@@ -518,9 +615,7 @@ def cmd_schema(a):
                 hdr.append(k)
                 aggiunte.append(f"{sheet}: colonna '{k}' (in coda)")
     if aggiunte:
-        _refresh(wb)
-        _touch(wb)
-        wb.save(a.path)
+        _save(wb, a.path, a.oggi)
     _out({"ok": True, "aggiunte": aggiunte})
 
 
@@ -528,6 +623,8 @@ def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--file", default=DEFAULT_FILE)
     p.add_argument("--dir", default=".")
+    p.add_argument("--oggi", type=dt.date.fromisoformat, default=dt.date.today(),
+                   help="data di riferimento AAAA-MM-GG per rate e scaduto (default: oggi)")
     sub = p.add_subparsers(dest="cmd", required=True)
     sub.add_parser("info")
     r = sub.add_parser("read"); r.add_argument("sheet"); r.add_argument("--where", action="append"); r.add_argument("--csv", action="store_true")
@@ -537,10 +634,12 @@ def main():
     d = sub.add_parser("diario"); d.add_argument("operazione"); d.add_argument("--dettaglio"); d.add_argument("--eseguito", default="IA"); d.add_argument("--approvato")
     sub.add_parser("verifica")
     sub.add_parser("schema")
+    si = sub.add_parser("situazione"); si.add_argument("--unita"); si.add_argument("--esercizio", type=int)
     a = p.parse_args()
     a.path = os.path.join(a.dir, a.file)
     {"info": cmd_info, "read": cmd_read, "append": cmd_append, "update": cmd_update,
-     "set": cmd_set, "diario": cmd_diario, "verifica": cmd_verifica, "schema": cmd_schema}[a.cmd](a)
+     "set": cmd_set, "diario": cmd_diario, "verifica": cmd_verifica, "schema": cmd_schema,
+     "situazione": cmd_situazione}[a.cmd](a)
 
 
 if __name__ == "__main__":

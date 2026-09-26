@@ -93,13 +93,15 @@ python3 "$R" append Spese '{"Data":"2026-03-14","Fornitore":"ENEL","Descrizione"
 python3 "$R" update Scadenze --where "ID=3" '{"ID evento":"abc123"}'
 python3 "$R" set Condominio "Modalità collaudo" SI      # aggiorna un valore del foglio chiave/valore
 python3 "$R" diario "Archiviata fattura ENEL luce scale" --approvato "Michele"
+python3 "$R" --file registro-riservato.xlsx situazione --unita U03   # dovuto, versato, saldo, scaduto, rate con stato
 ```
 
 Tutti i comandi accettano `--dir "<cartella del condominio>"`. Con `--file registro-riservato.xlsx`
 lo strumento lavora sul registro riservato (fogli `Situazione`, `Versamenti`, `Solleciti`): se la
 chiave `Percorso registro riservato` del foglio `Condominio` è valorizzata, passare quella cartella
 in `--dir`. `verifica` esce con codice 1 se ci sono problemi bloccanti e riscrive i valori derivati
-(utile dopo modifiche fatte a mano nel foglio).
+(utile dopo modifiche fatte a mano nel foglio). Per sapere quanto deve un'unità e se è in ritardo
+usare `situazione`, non ricalcolare a mano: le rate e lo scaduto dipendono dalla data di oggi.
 
 Il modello dati completo (fogli, colonne, tipi, vincoli) è in `references/modello-dati.md`:
 leggerlo prima di scrivere una riga. Le convenzioni di nome dei file sono in

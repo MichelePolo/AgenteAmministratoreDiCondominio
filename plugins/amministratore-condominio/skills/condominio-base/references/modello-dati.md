@@ -7,8 +7,9 @@ della riga 1.
 
 **Nessuna formula.** I condomini consultano i file dall'app Google Drive, la cui anteprima mostra
 solo i valori salvati (openpyxl non salva il risultato delle formule). I valori derivati (riga
-`TOTALE` di `Millesimi`, `Versato` e `Saldo` di `Situazione`) sono numeri che `registro.py`
-ricalcola e riscrive a ogni operazione (`append`, `update`, `verifica`).
+`TOTALE` di `Millesimi`, `Dovuto`, `Versato`, `Saldo` e `Scaduto` di `Situazione`) sono numeri che
+`registro.py` ricalcola e riscrive a ogni scrittura (`append`, `update`, `set`, `diario`,
+`verifica`, `schema`).
 
 Chiave di collegamento tra tutti i fogli: **`ID unità`** (testo breve, es. `U01`, `U02`…
 oppure `A-1`, `B-3`). Stabilita al setup, non cambia mai.
@@ -140,22 +141,46 @@ Traccia i file già elaborati da `archivio` (idempotenza).
 | ID unità | testo | chiave |
 | Intestatario | testo | |
 | Esercizio | anno | |
-| Dovuto | numero | somma delle quote dell'esercizio (da ultimo prospetto approvato) |
+| Dovuto | numero | **calcolato** se l'unità ha righe in `Rate` per l'esercizio: somma delle rate valide. Altrimenti (registri 0.3) è il valore scritto |
 | Versato | numero | **calcolato** da `registro.py`: somma dei `Versamenti` dell'unità per quell'esercizio (colonna `Esercizio` del versamento, altrimenti anno della `Data`) |
-| Saldo | numero | **calcolato**: `Dovuto − Versato` (positivo = deve ancora) |
+| Saldo | numero | **calcolato**: `Dovuto − Versato` (positivo = deve ancora, negativo = credito) |
 | Ultimo sollecito | data ISO | |
 | Livello sollecito | 0,1,2,3 | 0 nessuno, 1 cortese, 2 formale, 3 diffida |
 | Note | testo | |
+| Scaduto | numero | **calcolato**: rate valide con `Scadenza` passata (dal giorno dopo) non coperte dai versamenti. Vuoto se l'unità non ha rate: senza scadenze il ritardo non si conosce |
 
 ### Foglio `Versamenti`
 
-| ID | Data | ID unità | Importo | Esercizio | Riferimento | Rata | Note |
+| ID | Data | ID unità | Importo | Esercizio | Riferimento | Rata | Note | ID movimento |
 
 `Esercizio` collega il versamento alla riga giusta di `Situazione`; se vuoto vale l'anno della `Data`.
+`ID movimento` è l'impronta del movimento bancario da cui nasce il versamento (skill `versamenti`):
+se è già presente, il movimento è già stato registrato. Vuoto per i versamenti inseriti a mano.
 
 ### Foglio `Solleciti`
 
 | ID | Data | ID unità | Livello | Inviato a | Canale | Esito | Note |
+
+### Foglio `Rate`
+
+Una riga per unità e rata di ogni prospetto approvato. Le scrive `riparto.py approva`; non si
+cancellano mai.
+
+| Colonna | Tipo | Note |
+|---|---|---|
+| ID unità | testo | |
+| Esercizio | anno | |
+| Prospetto | testo | nome del file in `prospetti/` (senza `_bozza`) |
+| Rata | intero | 1…N nel prospetto |
+| Scadenza | data ISO | |
+| Importo | numero | |
+| Valida | `SI` \| `NO` | vuoto = `SI`; `NO` = prospetto sostituito (es. consuntivo al posto del preventivo) |
+| Note | testo | |
+
+I versamenti dell'unità nell'esercizio si imputano alle rate valide in ordine di scadenza. Stato
+di una rata: `pagata` (coperta per intero), `scaduta` (non coperta e scadenza passata), `parziale`
+(coperta in parte, non ancora scaduta), `da pagare`. `registro.py --file registro-riservato.xlsx
+situazione` restituisce per ogni unità dovuto, versato, saldo, scaduto, rate con stato e versamenti.
 
 ---
 
