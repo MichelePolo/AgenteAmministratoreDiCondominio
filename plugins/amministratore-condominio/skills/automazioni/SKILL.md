@@ -70,12 +70,35 @@ Poi, insieme all'utente:
 
 ### Terminale (Linux)
 
-Vedi la sezione "Terminale" aggiunta dalla fase 3 (script `pianifica.py`).
+Un servizio e un timer di `systemd` per l'utente lanciano `claude -p` nella cartella del condominio
+con le istruzioni come input e solo i permessi previsti. Lo script li **scrive** ma non li attiva:
+
+```bash
+python3 "${CLAUDE_SKILL_DIR}/scripts/pianifica.py" --dir "<cartella del condominio>" --giorno lun --ora 08:00
+```
+
+(giorni: `lun mar mer gio ven sab dom`). Scrive le istruzioni compilate in
+`~/.config/amministratore-condominio/` e i due file in `~/.config/systemd/user/`; nel servizio
+copia il PATH del terminale, senza le cartelle dei plugin di Claude, così `claude` e `python3` (con
+openpyxl) sono quelli che funzionano adesso. Se l'automazione esiste già ed è diversa, si ferma:
+rilanciare con `--sostituisci` dopo averlo detto all'utente.
+
+Poi mostrare all'utente i comandi di `comandi` e chiedergli di eseguirli (o di approvarli):
+`systemctl --user daemon-reload` e `systemctl --user enable --now riepilogo-<nome>.timer`. Per una
+prova immediata: `systemctl --user start riepilogo-<nome>.service`, poi controllare l'email e, se
+non arriva, `journalctl --user -u riepilogo-<nome>.service`. Perché giri anche quando l'utente non
+ha fatto l'accesso al computer serve `loginctl enable-linger $USER`: spiegarlo, farlo decidere a lui.
+
+Se `python3` nel terminale non ha openpyxl (per esempio perché si usa un ambiente virtuale),
+lanciare `pianifica.py` con quell'ambiente attivo, così il PATH del servizio lo contiene.
 
 ## Sospendere, modificare, eliminare
 
 - **Desktop**: chiedere in una sessione ("sospendi il riepilogo settimanale", "spostalo al
   venerdì") oppure dalla pagina dell'attività in Routines (Status, Edit, Delete).
+- **Terminale**: sospendere con `systemctl --user disable --now riepilogo-<nome>.timer`
+  (riattivare con `enable --now`); per spostare giorno o ora rilanciare `pianifica.py` con
+  `--sostituisci`; per eliminare, `pianifica.py --rimuovi` stampa i comandi da eseguire.
 - Annotare nel Diario: "Sospeso il riepilogo settimanale", "Eliminato il riepilogo settimanale".
 
 ## Regole
