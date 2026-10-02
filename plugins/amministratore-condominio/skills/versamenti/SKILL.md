@@ -5,7 +5,7 @@ description: >
   addebiti segna le spese pagate. Usare per "registra un versamento", "ha pagato", "bonifico",
   "estratto conto della banca", "chi ha pagato", "spese pagate".
 metadata:
-  version: "0.5.0"
+  version: "0.6.0"
 ---
 
 # Versamenti

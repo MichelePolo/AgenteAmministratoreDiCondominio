@@ -5,7 +5,7 @@ description: >
   rate) e, dopo l'approvazione, registrazione delle rate. Usare per "riparto", "quanto deve
   ciascuno", "quote", "rendiconto", "rate", "bilancio", "approvato".
 metadata:
-  version: "0.5.0"
+  version: "0.6.0"
 ---
 
 # Riparto

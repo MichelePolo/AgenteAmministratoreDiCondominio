@@ -5,7 +5,7 @@ description: >
   anagrafica e tabelle millesimali. Usare per "configura il condominio", "iniziamo",
   "nuovo condominio", "setup", o se manca registro-condominio.xlsx.
 metadata:
-  version: "0.5.0"
+  version: "0.6.0"
 ---
 
 # Setup del condominio

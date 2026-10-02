@@ -25,7 +25,7 @@ diligente. I file non contengono formule: l'anteprima di Drive mostra sempre i v
 | `condominio-setup` | la prima volta | verifica dei connettori e di Python, cartella strutturata, i due registri, anagrafica e tabelle millesimali, `LEGGIMI.txt` per i condomini |
 | `archivio` | "archivia i documenti" | legge `da analizzare/`, propone nomi e classificazione, sposta in `archivio/`, registra le spese |
 | `riparto` | "quanto deve ciascuno?", "l'assemblea ha approvato" | prospetto xlsx per unità e per spesa, con rate; somma esatta al centesimo; per gli appartamenti affittati, parte del proprietario e parte dell'inquilino; all'approvazione registra le rate con le loro scadenze |
-| `versamenti` | "registra i bonifici dell'estratto conto" | legge l'estratto conto PDF, propone per ogni bonifico unità e rata, registra dopo conferma senza doppioni |
+| `versamenti` | "registra l'estratto conto" | legge l'estratto conto PDF: per ogni bonifico propone unità e rata (e ricorda, se lo confermi, chi paga per chi), per ogni addebito la spesa che paga o una nuova spesa già pagata; registra tutto dopo conferma, senza doppioni |
 | `comunicazioni` | "convoca l'assemblea", "sollecita", "manda a tutti la situazione" | convocazioni, avvisi, solleciti (solo per rate scadute), verbali, situazione personale di ogni condomino; invio via Gmail solo dopo conferma |
 | `scadenze` | "cosa scade?" | scadenzario nel registro allineato a Google Calendar, senza duplicati |
 | `condominio-base` | (automatica) | regole, modello dati, riferimenti al codice civile |
@@ -75,7 +75,7 @@ Poi: aprire come cartella di lavoro la cartella del condominio in Google Drive e
   possibili, l'assistente chiede.
 - Il plugin cita gli articoli del codice civile pertinenti ma **non fornisce consulenza legale**.
 
-## Limiti noti (versione 0.5)
+## Limiti noti (versione 0.6)
 
 - Il registro è un file `.xlsx`, non un Google Sheet nativo: i condomini lo consultano da browser
   o dall'app Drive, ma la modifica va fatta dall'amministratore. È una scelta: evita un connettore
@@ -89,8 +89,9 @@ Poi: aprire come cartella di lavoro la cartella del condominio in Google Drive e
 - La divisione tra proprietario e inquilino usa le percentuali standard dell'art. 9 L. 392/1978,
   proposte spesa per spesa e modificabili; non legge i contratti di locazione.
 - I movimenti bancari si leggono da PDF o si dettano; l'import di file CSV/Excel dall'home banking
-  non c'è ancora. Gli addebiti dell'estratto conto non segnano le spese come pagate, e
-  l'abbinamento non ricorda chi paga per chi (un familiare con cognome diverso va indicato ogni volta).
+  non c'è ancora (serve un file di esempio: ogni banca ha il suo tracciato).
+- Un addebito paga una sola spesa: un addebito per più fatture, o una fattura pagata in acconto e
+  saldo, si abbina a voce.
 
 ## Struttura
 

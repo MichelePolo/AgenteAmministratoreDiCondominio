@@ -5,7 +5,7 @@ description: >
   prepara, l'umano approva), privacy, codice civile. Usare sempre se si parla di condominio,
   condomini, millesimi, spese comuni, assemblea, riparto, morosità.
 metadata:
-  version: "0.5.0"
+  version: "0.6.0"
 ---
 
 # Condominio — base comune

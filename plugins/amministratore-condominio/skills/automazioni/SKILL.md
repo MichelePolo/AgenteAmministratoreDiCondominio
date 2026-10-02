@@ -5,7 +5,7 @@ description: >
   senza aprire Claude. Usare per "mandami ogni lunedì come siamo messi", "riepilogo
   automatico", "programma", "automazione", "sospendi il riepilogo".
 metadata:
-  version: "0.5.0"
+  version: "0.6.0"
 ---
 
 # Automazioni

@@ -126,13 +126,23 @@ Scarica l'estratto conto del condominio in PDF dall'home banking e mettilo nella
 registro riservato, sottocartella `estratti conto/`: **non** in quella condivisa, perché contiene
 nomi e IBAN di tutti. Poi:
 
-> registra i bonifici dell'estratto conto di settembre
+> registra l'estratto conto di settembre
 
-L'assistente legge i bonifici in entrata e propone per ciascuno l'unità e la rata, con il motivo
-(nome dell'ordinante, interno nella causale, importo uguale alla rata). Quelli dubbi (un cognome
-solo, due omonimi, un familiare che paga per un altro) restano "da abbinare": di' tu a chi vanno
-("la 3 è l'interno 3"). Dopo la tua conferma li registra; rilanciare lo stesso estratto non crea
-doppioni. Per un pagamento singolo basta: "registra 150 € dall'interno 3, bonifico del 10 settembre".
+L'assistente legge **tutti** i movimenti e propone, in una tabella sola:
+
+- per ogni **bonifico in entrata**, l'unità e la rata, con il motivo (nome dell'ordinante, interno
+  nella causale, importo uguale alla rata). Quelli dubbi (un cognome solo, due omonimi, un familiare
+  che paga per un altro) restano "da abbinare": di' tu a chi vanno ("la 5 è l'interno 3"). Per chi
+  hai attribuito a voce ti chiede "ricordo che FERRARI GIOVANNA paga per l'interno 3?": se rispondi
+  sì, dal mese dopo il suo bonifico viene riconosciuto da solo ("dimentica Ferrari" per toglierlo);
+- per ogni **addebito**, la spesa del registro che paga (stesso importo; con più spese uguali
+  decidono il fornitore e la data, altrimenti chiede a te). Un addebito senza spesa diventa una
+  nuova spesa già pagata: le commissioni bancarie vanno da sole in tabella A, per le altre
+  l'assistente ti propone tabella e quota del conduttore. Quando poi la bolletta arriva in
+  `da analizzare/`, l'archivio completa quella spesa invece di registrarne una seconda.
+
+Dopo la tua conferma registra tutto insieme; rilanciare lo stesso estratto non crea doppioni. Per un
+pagamento singolo basta: "registra 150 € dall'interno 3, bonifico del 10 settembre".
 
 ## 9. La situazione di ciascuno
 
@@ -192,6 +202,8 @@ settimanale".
 - *Un condomino vede totali vuoti dal telefono*: il file è stato salvato con formule da un altro
   programma. Scrivi "verifica il registro": i valori vengono riscritti.
 
+- *"Spese pagate senza documento"*: sono spese nate da un addebito dell'estratto conto la cui
+  fattura non è ancora stata archiviata. Mettila in `da analizzare/` e scrivi "archivia".
 - *Il riepilogo del lunedì non arriva*: con Claude Desktop, l'app era chiusa o il computer spento
   (arriverà al prossimo avvio); guarda la cronologia dell'attività in Routines. Su Linux:
   `journalctl --user -u riepilogo-<nome del condominio>.service`.
