@@ -68,6 +68,9 @@ versamento di un fornitore). L'utente corregge per numero ("la 2 è U05"). Per l
 a mano, ricostruire `versamento` con i campi della proposta e `ID unità` cambiato; la `Rata` si
 può lasciare vuota: la situazione imputa comunque i versamenti alle rate in ordine di scadenza.
 
+Quando un motivo è "ordinante ricordato per l'interno N", dirlo nella tabella: l'utente deve
+poter vedere che l'abbinamento viene dalla memoria e non dal nome.
+
 ### 3. Registrazione (solo dopo conferma)
 
 Scrivere in un JSON l'elenco delle righe `versamento` confermate, poi:
@@ -80,6 +83,28 @@ Lo script ricontrolla tutto prima di scrivere (unità esistenti, movimenti non g
 crea le righe di `Situazione` mancanti e scrive nel Diario **solo il numero** dei versamenti. Se
 esce con `"ok": false`, nulla è stato scritto: mostrare gli errori e correggere.
 
+### Memoria di chi paga per chi
+
+Dopo la registrazione, per ogni bonifico che era `da_abbinare` **e che l'utente ha attribuito a
+voce**, se l'ordinante non è vuoto chiedere **una volta**, tutti insieme:
+
+> Ricordo che FERRARI GIOVANNA paga per l'interno 3? Così la prossima volta lo propongo da solo.
+
+Solo per le risposte sì:
+
+```bash
+python3 "${CLAUDE_SKILL_DIR}/scripts/abbina.py" ricorda --dir "<cartella>" --ordinante "FERRARI GIOVANNA" --unita U03 --approvato "<nome>"
+```
+
+Se la risposta riporta `avviso` (l'ordinante è già ricordato per un'altra unità, per esempio un
+genitore con due appartamenti), leggerlo all'utente: quei bonifici resteranno da abbinare quando la
+causale non indica l'interno. Non chiedere di ricordare un pagamento palesemente occasionale (un
+vicino che paga una volta per un altro) e mai i bonifici già proposti per nome o per memoria.
+
+Per togliere una memoria sbagliata o non più valida ("Ferrari non paga più per l'interno 3"):
+`abbina.py dimentica --ordinante "…" [--unita U03] --approvato "<nome>"`. La riga resta,
+disattivata.
+
 ### 4. Chiusura
 
 Riepilogo in tre righe: registrati, rimasti da abbinare, già presenti (e addebiti ignorati se
@@ -91,6 +116,7 @@ unità con `Scaduto` > 0: "3 unità hanno rate scadute non pagate". Proporre la 
 
 - Mai registrare un versamento senza conferma, nemmeno se l'esito è `proposto`.
 - Mai scegliere tra due candidati: chiedere.
+- Mai ricordare un ordinante senza un sì esplicito alla domanda.
 - Il conduttore che paga paga per l'unità: il versamento va all'unità (il debitore resta il
   proprietario, vedi `condominio-base`).
 - Nel Diario, che è pubblico, mai nomi, unità o importi dei versamenti: ci pensa lo script. Se

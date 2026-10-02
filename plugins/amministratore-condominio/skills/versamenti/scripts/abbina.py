@@ -12,6 +12,11 @@ abbina.py — abbina i movimenti in entrata (bonifici) alle unità e alle rate, 
       Scrive in Versamenti le righe confermate (le "versamento" della proposta, eventualmente corrette),
       crea le righe mancanti di Situazione e annota nel Diario solo il numero dei versamenti.
 
+  abbina.py ricorda --dir "<cartella>" --ordinante "<come nell'estratto>" --unita U03 --approvato "<nome>"
+  abbina.py dimentica --dir "<cartella>" --ordinante "<…>" [--unita U03] --approvato "<nome>"
+      Memoria di chi paga per chi (foglio Ordinanti del registro riservato): un ordinante ricordato
+      pesa quanto un nome completo. Si ricorda solo dopo un sì dell'utente; dimenticare disattiva.
+
 Il punteggio decide solo cosa PROPORRE: ogni abbinamento va confermato dall'utente.
 """
 import argparse
@@ -44,6 +49,7 @@ PESO_INTERNO = 40         # "INT 3", "INTERNO 3", "APP 3" o l'ID unità nella ca
 PESO_RATA = 30            # importo = parte ancora da pagare della prossima rata
 PESO_SALDO = 20           # importo = tutto il saldo
 PESO_ALTRA_RATA = 15      # importo = l'importo pieno di un'altra rata
+PESO_MEMORIA = 60         # ordinante ricordato per l'unità (foglio Ordinanti): basta da solo, come un nome completo
 SOGLIA = 60               # punteggio minimo per proporre
 DISTACCO = 25             # vantaggio minimo sul secondo candidato
 
@@ -91,11 +97,25 @@ def persone(anag_riga):
     return [n.strip() for n in nomi if n.strip()]
 
 
-def punteggio(mov, uid, anag_riga, prossima, saldo, importi_rate):
-    """(punti, motivi) di un movimento per un'unità. prossima = parte ancora da pagare della prima rata aperta."""
+def ordinanti_attivi(wb_r):
+    """{ordinante normalizzato: {ID unità, …}} dalle righe attive del foglio Ordinanti."""
+    memoria = {}
+    if "Ordinanti" in wb_r.sheetnames:
+        for r in reg._rows(wb_r["Ordinanti"]):
+            if str(r.get("Attiva") or "SI").strip().upper() != "NO" and not reg._blank(r.get("Ordinante")):
+                memoria.setdefault(norm(r["Ordinante"]), set()).add(str(r.get("ID unità") or "").strip())
+    return memoria
+
+
+def punteggio(mov, uid, anag_riga, prossima, saldo, importi_rate, ricordati=()):
+    """(punti, motivi) di un movimento per un'unità. prossima = parte ancora da pagare della prima rata aperta;
+    ricordati = unità per cui l'ordinante del movimento è nella memoria."""
     testo = f" {norm(mov['ordinante'])} {norm(mov['causale'])} "
     causale = f" {norm(mov['causale'])} "
     punti, motivi = 0, []
+    if uid in ricordati:
+        punti += PESO_MEMORIA
+        motivi.append(f"ordinante ricordato per l'interno {anag_riga.get('Interno') or uid}")
     miglior_nome = 0
     for nome in persone(anag_riga):
         parole = [p for p in norm(nome).split() if len(p) >= 3]
@@ -182,6 +202,7 @@ def proponi(a):
     anag = {str(r["ID unità"]).strip(): r for r in reg._rows(wb_c["Anagrafica"]) if not reg._blank(r.get("ID unità"))}
     conti = Conti(reg.situazione(wb_r, a.oggi, esercizio))
     gia = {str(v.get("ID movimento")).strip() for v in reg._rows(wb_r["Versamenti"]) if not reg._blank(v.get("ID movimento"))}
+    memoria = ordinanti_attivi(wb_r)
 
     with open(a.movimenti, encoding="utf-8") as f:
         grezzi = json.load(f)
@@ -217,7 +238,8 @@ def proponi(a):
         else:
             classifica = []
             for uid, riga in anag.items():
-                p, motivi = punteggio(m, uid, riga, conti.prossima(uid), conti.saldo.get(uid), conti.importi(uid))
+                p, motivi = punteggio(m, uid, riga, conti.prossima(uid), conti.saldo.get(uid), conti.importi(uid),
+                                      memoria.get(norm(m["ordinante"]), ()))
                 if p > 0:
                     classifica.append({"unita": uid, "intestatario": riga.get("Intestatario"), "punteggio": p, "motivi": motivi})
             classifica.sort(key=lambda c: -c["punteggio"])
@@ -298,22 +320,96 @@ def registra(a):
                      ensure_ascii=False, indent=2, default=str))
 
 
+def _diario(wb_c, operazione, approvato):
+    reg.aggiungi(wb_c["Diario"], {"Data-ora": dt.datetime.now().isoformat(timespec="seconds"), "Operazione": operazione,
+                                  "Dettaglio": "dettaglio nel registro riservato", "Eseguito da": "IA", "Approvato da": approvato})
+
+
+def ricorda(a):
+    wb_c, path_c, wb_r, path_r = carica(a)
+    if "Ordinanti" not in wb_r.sheetnames:
+        sys.exit("Il registro riservato non ha il foglio Ordinanti: eseguire `registro.py --file registro-riservato.xlsx schema`")
+    chiave, uid = norm(a.ordinante), a.unita.strip()
+    anag = {str(r["ID unità"]).strip() for r in reg._rows(wb_c["Anagrafica"]) if not reg._blank(r.get("ID unità"))}
+    errori = ([] if chiave else ["ordinante vuoto: si ricorda solo un ordinante scritto nell'estratto conto"]) + \
+             ([] if uid in anag else [f"unità {uid} inesistente in Anagrafica"])
+    if errori:
+        print(json.dumps({"ok": False, "errori": errori}, ensure_ascii=False, indent=2))
+        sys.exit(2)
+    ws = wb_r["Ordinanti"]
+    hdr = reg._headers(ws)
+    c = {h: i for i, h in enumerate(hdr, start=1)}
+    altre, riattivato = set(), False
+    for r in range(2, ws.max_row + 1):
+        if norm(ws.cell(r, c["Ordinante"]).value) != chiave:
+            continue
+        attiva = str(ws.cell(r, c["Attiva"]).value or "SI").strip().upper() != "NO"
+        if str(ws.cell(r, c["ID unità"]).value or "").strip() == uid:
+            if attiva:
+                print(json.dumps({"ok": True, "ordinante": chiave, "unita": uid, "gia_ricordato": True}, ensure_ascii=False))
+                return
+            reg._put(ws, r, c["Attiva"], "Attiva", "SI")
+            reg._put(ws, r, c["Dal"], "Dal", a.oggi)
+            riattivato = True
+        elif attiva:
+            altre.add(str(ws.cell(r, c["ID unità"]).value or "").strip())
+    if not riattivato:
+        reg.aggiungi(ws, {"Ordinante": chiave, "ID unità": uid, "Dal": a.oggi, "Attiva": "SI"})
+    _diario(wb_c, "Memorizzato 1 ordinante", a.approvato)
+    reg._save(wb_r, path_r, a.oggi)
+    reg._save(wb_c, path_c, a.oggi)
+    out = {"ok": True, "ordinante": chiave, "unita": uid, "riattivato": riattivato, "anche_per": sorted(altre)}
+    if altre:
+        out["avviso"] = (f"{chiave} è ricordato anche per {', '.join(sorted(altre))}: i suoi bonifici resteranno "
+                         "da abbinare se la causale non indica l'interno")
+    print(json.dumps(out, ensure_ascii=False, indent=2))
+
+
+def dimentica(a):
+    wb_c, path_c, wb_r, path_r = carica(a)
+    chiave = norm(a.ordinante)
+    ws = wb_r["Ordinanti"] if "Ordinanti" in wb_r.sheetnames else None
+    disattivate = []
+    if ws is not None and chiave:
+        hdr = reg._headers(ws)
+        c = {h: i for i, h in enumerate(hdr, start=1)}
+        for r in range(2, ws.max_row + 1):
+            uid = str(ws.cell(r, c["ID unità"]).value or "").strip()
+            if (norm(ws.cell(r, c["Ordinante"]).value) == chiave and (not a.unita or uid == a.unita.strip())
+                    and str(ws.cell(r, c["Attiva"]).value or "SI").strip().upper() != "NO"):
+                reg._put(ws, r, c["Attiva"], "Attiva", "NO")
+                disattivate.append(uid)
+    if not disattivate:
+        print(json.dumps({"ok": False, "errori": [f"nessuna memoria attiva per {chiave or '(vuoto)'}"
+                                                  + (f" e {a.unita}" if a.unita else "")]}, ensure_ascii=False, indent=2))
+        sys.exit(2)
+    n = len(disattivate)
+    _diario(wb_c, f"Disattivat{'o' if n == 1 else 'i'} {n} ordinant{'e' if n == 1 else 'i'}", a.approvato)
+    reg._save(wb_r, path_r, a.oggi)
+    reg._save(wb_c, path_c, a.oggi)
+    print(json.dumps({"ok": True, "ordinante": chiave, "disattivate": disattivate}, ensure_ascii=False, indent=2))
+
+
 def main():
-    registra_cmd = len(sys.argv) > 1 and sys.argv[1] == "registra"
-    p = argparse.ArgumentParser(prog="abbina.py" + (" registra" if registra_cmd else ""), description=__doc__,
+    comandi = {"registra": registra, "ricorda": ricorda, "dimentica": dimentica}
+    cmd = sys.argv[1] if len(sys.argv) > 1 and sys.argv[1] in comandi else None
+    p = argparse.ArgumentParser(prog="abbina.py" + (f" {cmd}" if cmd else ""), description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--dir", default=".")
     p.add_argument("--oggi", type=dt.date.fromisoformat, default=dt.date.today())
-    if registra_cmd:
+    if cmd == "registra":
         p.add_argument("--versamenti", required=True, help="JSON con le righe di Versamenti confermate")
-        p.add_argument("--approvato", required=True)
-        a = p.parse_args(sys.argv[2:])
+    elif cmd in ("ricorda", "dimentica"):
+        p.add_argument("--ordinante", required=True, help="ordinante come scritto nell'estratto conto")
+        p.add_argument("--unita", required=cmd == "ricorda")
     else:
         p.add_argument("--movimenti", required=True, help="JSON con i movimenti da abbinare")
         p.add_argument("--esercizio", type=int)
-        a = p.parse_args()
+    if cmd:
+        p.add_argument("--approvato", required=True)
+    a = p.parse_args(sys.argv[2:] if cmd else sys.argv[1:])
     try:
-        (registra if registra_cmd else proponi)(a)
+        (comandi[cmd] if cmd else proponi)(a)
     except SystemExit:
         raise
     except Exception as e:  # mai un traceback all'utente
