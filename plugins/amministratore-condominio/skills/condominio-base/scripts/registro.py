@@ -49,7 +49,7 @@ FMT_EURO = "#,##0.00 €"
 FMT_DATE = "yyyy-mm-dd"
 CENT = Decimal("0.01")
 COL_IMPORTI = {"importo", "quota", "dovuto", "versato", "saldo", "scaduto"}
-COL_DATE = {"data", "data pagamento", "ultimo sollecito", "data elaborazione", "scadenza"}
+COL_DATE = {"data", "data pagamento", "ultimo sollecito", "data elaborazione", "scadenza", "dal"}
 COL_INT = {"esercizio", "piano", "id spesa", "livello", "livello sollecito", "id", "rata",
            "esercizio corrente", "numero unità"}
 COL_PCT = {"quota conduttore %"}
@@ -65,7 +65,7 @@ SCHEMA = {
                        "Dati catastali", "Note"],
         "Millesimi": ["ID unità", "Intestatario", "Tab A", "Tab B", "Tab C"],
         "Spese": ["ID", "Data", "Fornitore", "Descrizione", "Importo", "Tabella", "Quota conduttore %", "Esercizio", "File",
-                  "Pagata", "Data pagamento", "Note"],
+                  "Pagata", "Data pagamento", "Note", "ID movimento"],
         "Riparti manuali": ["ID spesa", "ID unità", "Quota", "Note"],
         "Scadenze": ["ID", "Data", "Ora", "Tipo", "Descrizione", "Ricorrenza", "ID evento", "Note"],
         "Diario": ["Data-ora", "Operazione", "Dettaglio", "Eseguito da", "Approvato da"],
@@ -77,6 +77,7 @@ SCHEMA = {
         "Versamenti": ["ID", "Data", "ID unità", "Importo", "Esercizio", "Riferimento", "Rata", "Note", "ID movimento"],
         "Solleciti": ["ID", "Data", "ID unità", "Livello", "Inviato a", "Canale", "Esito", "Note"],
         "Rate": ["ID unità", "Esercizio", "Prospetto", "Rata", "Scadenza", "Importo", "Valida", "Note"],
+        "Ordinanti": ["Ordinante", "ID unità", "Dal", "Attiva", "Note"],
     },
 }
 

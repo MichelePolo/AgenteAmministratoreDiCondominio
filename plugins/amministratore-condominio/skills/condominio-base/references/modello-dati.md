@@ -104,7 +104,8 @@ tabella per un'unità mette 0, non vuoto. Le unità vanno inserite sopra la riga
 | File | percorso relativo | dentro `archivio/` |
 | Pagata | `SI` \| `NO` | |
 | Data pagamento | data ISO | |
-| Note | testo | |
+| Note | testo | per le spese nate da un addebito: "da estratto conto del <data>; documento da archiviare" (o "documento non previsto" per le spese bancarie) |
+| ID movimento | testo | impronta dell'addebito bancario che ha pagato la spesa (skill `versamenti`); vuoto per i pagamenti registrati a mano |
 
 ### Foglio `Riparti manuali` (opzionale)
 
@@ -173,6 +174,23 @@ se è già presente, il movimento è già stato registrato. Vuoto per i versamen
 ### Foglio `Solleciti`
 
 | ID | Data | ID unità | Livello | Inviato a | Canale | Esito | Note |
+
+### Foglio `Ordinanti`
+
+Memoria di chi paga per chi (skill `versamenti`): un familiare o un terzo che paga per un'unità.
+Si aggiunge **solo** dopo che l'utente ha risposto sì a "ricordo che … paga per l'interno N?".
+Non si cancella: una memoria sbagliata o non più valida si disattiva.
+
+| Colonna | Tipo | Note |
+|---|---|---|
+| Ordinante | testo | normalizzato: maiuscolo, senza accenti né punteggiatura (come nell'estratto, ripulito) |
+| ID unità | testo | |
+| Dal | data ISO | quando è stato ricordato |
+| Attiva | `SI` \| `NO` | vuoto = `SI` |
+| Note | testo | |
+
+Lo stesso ordinante può essere ricordato per più unità (un genitore con due appartamenti): in quel
+caso i suoi bonifici restano "da abbinare" se la causale non indica l'interno.
 
 ### Foglio `Rate`
 

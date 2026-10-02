@@ -34,7 +34,7 @@ INPUT_FILL = PatternFill("solid", fgColor="FFF8DC")
 FMT_EURO = "#,##0.00 €"
 FMT_DATE = "yyyy-mm-dd"
 COL_IMPORTI = {"Importo", "Quota", "Dovuto", "Versato", "Saldo", "Scaduto"}
-COL_DATE = {"Data", "Data pagamento", "Ultimo sollecito", "Data elaborazione", "Scadenza"}
+COL_DATE = {"Data", "Data pagamento", "Ultimo sollecito", "Data elaborazione", "Scadenza", "Dal"}
 
 FOLDERS = ["da analizzare", "prospetti"] + [
     f"archivio/{{anno}}/{s}" for s in ("fatture", "preventivi", "verbali", "comunicazioni", "contratti", "altro", "altro/duplicati")
@@ -102,7 +102,7 @@ def crea_condominio(path, nome, esercizio, esempio):
     an = _sheet(wb, "Anagrafica", an_h, {"Intestatario": 28, "Email": 30, "Conduttore": 24, "Email conduttore": 30, "Dati catastali": 24, "Note": 30})
     mi_h = ["ID unità", "Intestatario", "Tab A", "Tab B", "Tab C"]
     mi = _sheet(wb, "Millesimi", mi_h, {"Intestatario": 28})
-    sp_h = ["ID", "Data", "Fornitore", "Descrizione", "Importo", "Tabella", "Quota conduttore %", "Esercizio", "File", "Pagata", "Data pagamento", "Note"]
+    sp_h = ["ID", "Data", "Fornitore", "Descrizione", "Importo", "Tabella", "Quota conduttore %", "Esercizio", "File", "Pagata", "Data pagamento", "Note", "ID movimento"]
     sp = _sheet(wb, "Spese", sp_h, {"Descrizione": 34, "File": 60, "Fornitore": 22, "Quota conduttore %": 20, "Note": 30})
     sp["G1"].comment = Comment("Percentuale della quota di ogni unità che, all'interno dell'unità, spetta al conduttore "
                                "(art. 9 L. 392/1978): 100 per pulizie, luce scale, acqua, riscaldamento, ordinaria ascensore; "
@@ -152,6 +152,7 @@ def crea_riservato(path, esercizio, esempio):
     ve = _sheet(wb, "Versamenti", ve_h, {"Riferimento": 30, "Note": 30})
     _sheet(wb, "Solleciti", ["ID", "Data", "ID unità", "Livello", "Inviato a", "Canale", "Esito", "Note"], {"Inviato a": 30, "Note": 30})
     ra = _sheet(wb, "Rate", ["ID unità", "Esercizio", "Prospetto", "Rata", "Scadenza", "Importo", "Valida", "Note"], {"Prospetto": 50, "Note": 30})
+    _sheet(wb, "Ordinanti", ["Ordinante", "ID unità", "Dal", "Attiva", "Note"], {"Ordinante": 34, "Note": 30})
     ra["A1"].comment = Comment("Una riga per unità e rata di ogni prospetto approvato, scritta da riparto.py approva. "
                                "Valida = NO se il prospetto è stato sostituito (mai cancellare).", "amministratore-condominio")
     unita = [("U01", "Mario Rossi"), ("U02", "Anna Bianchi"), ("U03", "Luca Verdi"), ("U04", "Giulia Neri")] if esempio else []
