@@ -1,16 +1,19 @@
 #!/usr/bin/env python3
 """
-abbina.py — abbina i movimenti in entrata (bonifici) alle unità e alle rate, poi li registra.
+abbina.py — abbina i movimenti di un estratto conto e li registra: i bonifici in entrata alle unità e
+alle rate, gli addebiti alle spese del registro (che diventano pagate).
 
   abbina.py --dir "<cartella>" --movimenti movimenti.json [--esercizio 2026] [--oggi 2026-09-26]
       Non scrive nulla. Legge un JSON [{"data", "importo", "ordinante", "causale"[, "unita"]}, ...]
       (estratto da un estratto conto o dettato dall'utente; "unita" solo se l'ha indicata l'utente) e
-      propone per ogni movimento: esito (proposto | da_abbinare | gia_registrato | ignorato), unità,
-      rata coperta, motivi del punteggio, candidati alternativi e la riga di Versamenti pronta.
+      propone per ogni movimento in entrata: esito (proposto | da_abbinare | gia_registrato | ignorato),
+      unità, rata coperta, motivi, candidati e la riga di Versamenti pronta. Per ogni addebito (importo
+      negativo): spesa_pagata | spesa_da_abbinare | nuova_spesa | gia_registrato, con la riga pronta.
 
   abbina.py registra --dir "<cartella>" --versamenti confermati.json --approvato "<nome>"
-      Scrive in Versamenti le righe confermate (le "versamento" della proposta, eventualmente corrette),
-      crea le righe mancanti di Situazione e annota nel Diario solo il numero dei versamenti.
+      Il JSON è l'elenco delle righe di Versamenti confermate, oppure un oggetto
+      {"versamenti": [...], "spese_pagate": [...], "nuove_spese": [...]}. Ricontrolla tutto, poi scrive
+      tutto o niente; crea le righe mancanti di Situazione; nel Diario solo i conteggi.
 
   abbina.py ricorda --dir "<cartella>" --ordinante "<come nell'estratto>" --unita U03 --approvato "<nome>"
   abbina.py dimentica --dir "<cartella>" --ordinante "<…>" [--unita U03] --approvato "<nome>"
@@ -50,6 +53,10 @@ PESO_RATA = 30            # importo = parte ancora da pagare della prossima rata
 PESO_SALDO = 20           # importo = tutto il saldo
 PESO_ALTRA_RATA = 15      # importo = l'importo pieno di un'altra rata
 PESO_MEMORIA = 60         # ordinante ricordato per l'unità (foglio Ordinanti): basta da solo, come un nome completo
+GIORNI_ADDEBITO = 180     # un addebito paga una spesa tra la data del documento e 180 giorni dopo
+# Movimenti della banca stessa: commissioni, canoni, bolli, interessi. Non sono versamenti di condomini;
+# se sono addebiti senza spesa diventano una spesa generale (tabella A, nulla al conduttore).
+BANCARIO = re.compile(r"\b(COMMISSION\w*|CANONE|BOLLO|IMPOSTA DI BOLLO|SPESE TENUTA|TENUTA CONTO|INTERESSI|COMPETENZE)\b")
 SOGLIA = 60               # punteggio minimo per proporre
 DISTACCO = 25             # vantaggio minimo sul secondo candidato
 
@@ -196,6 +203,65 @@ def carica(a):
     return wb_c, path_c, openpyxl.load_workbook(path_r), path_r
 
 
+def addebito(m, spese, gia_spese, usate, bancario):
+    """Esito di un addebito. Candidate: spese con lo stesso importo, non ancora pagate oppure segnate pagate a
+    mano senza ID movimento (solo da collegare, senza doppioni). Uno a uno: mai somme di più spese."""
+    importo = -m["importo"]
+    if m["id_movimento"] in gia_spese:
+        return {"esito": "gia_registrato", "motivo": "addebito già presente in Spese"}
+    testo = f" {norm(m['ordinante'])} {norm(m['causale'])} "
+    candidati = []
+    for r in spese:
+        sid = reg._norm(r.get("ID"))
+        pagata = str(r.get("Pagata") or "").strip().upper() == "SI"
+        if sid in usate or (pagata and not reg._blank(r.get("ID movimento"))):
+            continue
+        if reg._num(r.get("Importo")).quantize(CENT) != importo:
+            continue
+        motivi = []
+        parole = [p for p in norm(r.get("Fornitore")).split() if len(p) >= 3]
+        fornitore = any(f" {p} " in testo for p in parole)
+        if fornitore:
+            motivi.append(f"fornitore {r.get('Fornitore')} nella descrizione")
+        d_spesa = reg._as_date(r.get("Data"))
+        in_finestra = d_spesa is None or 0 <= (m["data"] - d_spesa).days <= GIORNI_ADDEBITO
+        if d_spesa and in_finestra:
+            motivi.append(f"data entro {GIORNI_ADDEBITO} giorni dal documento")
+        motivi.insert(0, "stesso importo")
+        if pagata:
+            motivi.append("già segnata pagata a mano: si collega l'addebito")
+        candidati.append({"id_spesa": sid, "data_spesa": reg._norm(r.get("Data")), "fornitore": r.get("Fornitore"),
+                          "descrizione": r.get("Descrizione"), "gia_pagata": pagata, "motivi": motivi,
+                          "forte": fornitore and in_finestra, "plausibile": fornitore or in_finestra})
+    forti = [c for c in candidati if c["forte"]]
+    scelta = None
+    if len(candidati) == 1 and candidati[0]["plausibile"]:
+        scelta = candidati[0]
+    elif len(forti) == 1:
+        scelta = forti[0]
+    pulisci = lambda c: {k: v for k, v in c.items() if k not in ("forte", "plausibile")}
+    if scelta:
+        usate.add(scelta["id_spesa"])
+        return {"esito": "spesa_pagata", **pulisci(scelta),
+                "candidati": [pulisci(c) for c in candidati if c is not scelta][:2],
+                "spesa_pagata": {"ID spesa": scelta["id_spesa"], "Data pagamento": m["data"].isoformat(),
+                                 "ID movimento": m["id_movimento"]}}
+    if candidati:
+        return {"esito": "spesa_da_abbinare",
+                "motivo": "più spese con lo stesso importo" if len(candidati) > 1 else "importo uguale ma fornitore e data non tornano",
+                "candidati": [pulisci(c) for c in candidati][:5]}
+    controparte = (m["ordinante"] or m["causale"]).strip()
+    nota = f"da estratto conto del {reg.data_it(m['data'])}; " + ("documento non previsto" if bancario else reg.NOTA_DA_ARCHIVIARE)
+    riga = {"Data": m["data"].isoformat(), "Fornitore": controparte[:40].title(), "Descrizione": (m["causale"] or controparte)[:80],
+            "Importo": float(importo), "Tabella": "A" if bancario else None, "Quota conduttore %": 0 if bancario else None,
+            "Esercizio": m["data"].year, "Pagata": "SI", "Data pagamento": m["data"].isoformat(), "Note": nota,
+            "ID movimento": m["id_movimento"]}
+    return {"esito": "nuova_spesa", "spesa_bancaria": bancario,
+            "motivo": "spesa bancaria: tabella A, nulla al conduttore" if bancario else
+                      "nessuna spesa con questo importo: proporre tabella e quota conduttore con i criteri di archivio",
+            "nuova_spesa": riga}
+
+
 def proponi(a):
     wb_c, _, wb_r, _ = carica(a)
     esercizio = a.esercizio or int(reg._kv(wb_c["Condominio"]).get("Esercizio corrente") or a.oggi.year)
@@ -203,6 +269,9 @@ def proponi(a):
     conti = Conti(reg.situazione(wb_r, a.oggi, esercizio))
     gia = {str(v.get("ID movimento")).strip() for v in reg._rows(wb_r["Versamenti"]) if not reg._blank(v.get("ID movimento"))}
     memoria = ordinanti_attivi(wb_r)
+    spese = [r for r in reg._rows(wb_c["Spese"]) if not reg._blank(r.get("ID")) and reg._num(r.get("Importo"))]
+    gia_spese = {str(r.get("ID movimento")).strip() for r in spese if not reg._blank(r.get("ID movimento"))}
+    usate = set()  # spese già abbinate da un addebito precedente dello stesso elenco
 
     with open(a.movimenti, encoding="utf-8") as f:
         grezzi = json.load(f)
@@ -225,8 +294,15 @@ def proponi(a):
     for m in movimenti:
         voce = {"n": m["n"], "data": m["data"].isoformat(), "importo": float(m["importo"]), "ordinante": m["ordinante"],
                 "causale": m["causale"], "id_movimento": m["id_movimento"]}
-        if m["importo"] <= 0:
-            voce.update(esito="ignorato", motivo="addebito o importo nullo: la skill registra solo i versamenti in entrata")
+        bancario = bool(BANCARIO.search(f" {norm(m['ordinante'])} {norm(m['causale'])} "))
+        if m["importo"] < 0:
+            voce.update(addebito(m, spese, gia_spese, usate, bancario))
+            out.append(voce)
+            continue
+        if m["importo"] == 0:
+            voce.update(esito="ignorato", motivo="importo nullo")
+        elif bancario and not m["unita"]:
+            voce.update(esito="ignorato", motivo="movimento della banca (interessi, rimborsi): non è un versamento di un condomino")
         elif m["id_movimento"] in gia:
             voce.update(esito="gia_registrato", motivo="movimento già presente in Versamenti")
         elif m["unita"]:
@@ -259,18 +335,42 @@ def proponi(a):
                 "Esercizio": conti.esercizio.get(uid) or esercizio, "Rata": rata,
                 "Riferimento": (m["causale"] or m["ordinante"])[:80], "ID movimento": m["id_movimento"]})
         out.append(voce)
-    conteggio = {e: sum(v["esito"] == e for v in out) for e in ("proposto", "da_abbinare", "gia_registrato", "ignorato")}
+    conteggio = {e: sum(v["esito"] == e for v in out) for e in
+                 ("proposto", "da_abbinare", "gia_registrato", "ignorato", "spesa_pagata", "spesa_da_abbinare", "nuova_spesa")}
     print(json.dumps({"ok": True, "esercizio": esercizio, "oggi": a.oggi.isoformat(), "riepilogo": conteggio,
                       "movimenti": out}, ensure_ascii=False, indent=2, default=str))
+
+
+def _plurale(n, singolare, plurale):
+    return f"{n} {singolare if n == 1 else plurale}"
 
 
 def registra(a):
     wb_c, path_c, wb_r, path_r = carica(a)
     with open(a.versamenti, encoding="utf-8") as f:
-        righe = json.load(f)
+        dati = json.load(f)
+    if isinstance(dati, list):  # formato 0.5: solo versamenti
+        dati = {"versamenti": dati}
+    righe = dati.get("versamenti") or []
+    pagate = dati.get("spese_pagate") or []
+    nuove = dati.get("nuove_spese") or []
     anag = {str(r["ID unità"]).strip(): r for r in reg._rows(wb_c["Anagrafica"]) if not reg._blank(r.get("ID unità"))}
     gia = {str(v.get("ID movimento")).strip() for v in reg._rows(wb_r["Versamenti"]) if not reg._blank(v.get("ID movimento"))}
+    ws_sp = wb_c["Spese"]
+    hdr_sp = reg._headers(ws_sp)
+    if (pagate or nuove) and "ID movimento" not in hdr_sp:
+        sys.exit("Il foglio Spese non ha la colonna 'ID movimento': eseguire `registro.py schema`")
+    righe_spese = {reg._norm(ws_sp.cell(r, 1).value): r for r in range(2, ws_sp.max_row + 1) if not reg._blank(ws_sp.cell(r, 1).value)}
+    gia_spese = {str(v.get("ID movimento")).strip() for v in reg._rows(ws_sp) if not reg._blank(v.get("ID movimento"))}
     errori, nuove_ids = [], set()
+
+    def movimento(etichetta, v, registrati):
+        mid = str(v.get("ID movimento") or "").strip()
+        if mid and (mid in registrati or mid in nuove_ids):
+            errori.append(f"{etichetta}: movimento {mid} già registrato")
+        if mid:
+            nuove_ids.add(mid)
+
     for i, v in enumerate(righe, start=1):
         uid = str(v.get("ID unità") or "").strip()
         if uid not in anag:
@@ -281,11 +381,30 @@ def registra(a):
             data_da(v.get("Data"))
         except (ValueError, ArithmeticError) as e:
             errori.append(f"Versamento {i}: {e}")
-        mid = str(v.get("ID movimento") or "").strip()
-        if mid and (mid in gia or mid in nuove_ids):
-            errori.append(f"Versamento {i}: movimento {mid} già registrato")
-        if mid:
-            nuove_ids.add(mid)
+        movimento(f"Versamento {i}", v, gia)
+    col = {h: c for c, h in enumerate(hdr_sp, start=1)}
+    for i, v in enumerate(pagate, start=1):
+        sid = reg._norm(v.get("ID spesa"))
+        r = righe_spese.get(sid)
+        if r is None:
+            errori.append(f"Spesa pagata {i}: spesa {sid} inesistente")
+        elif not reg._blank(ws_sp.cell(r, col["ID movimento"]).value):
+            errori.append(f"Spesa pagata {i}: la spesa {sid} è già collegata a un addebito")
+        try:
+            data_da(v.get("Data pagamento"))
+        except ValueError as e:
+            errori.append(f"Spesa pagata {i}: {e}")
+        movimento(f"Spesa pagata {i}", v, gia_spese)
+    for i, v in enumerate(nuove, start=1):
+        if reg._blank(v.get("Tabella")):
+            errori.append(f"Nuova spesa {i}: manca la Tabella (il riparto la rifiuterebbe)")
+        try:
+            if importo_da(v.get("Importo")) <= 0:
+                errori.append(f"Nuova spesa {i}: importo non positivo")
+            data_da(v.get("Data"))
+        except (ValueError, ArithmeticError) as e:
+            errori.append(f"Nuova spesa {i}: {e}")
+        movimento(f"Nuova spesa {i}", v, gia_spese)
     if errori:
         print(json.dumps({"ok": False, "errori": errori}, ensure_ascii=False, indent=2))
         sys.exit(2)
@@ -306,16 +425,36 @@ def registra(a):
                                 "Esercizio": riga["Esercizio"], "Livello sollecito": 0})
             esistenti.add(chiave)
             situazioni_create.append(riga["ID unità"])
-    # Diario pubblico: solo il numero, mai nomi o importi
-    n = len(righe)
-    reg.aggiungi(wb_c["Diario"], {"Data-ora": dt.datetime.now().isoformat(timespec="seconds"),
-                                  "Operazione": f"Registrat{'o' if n == 1 else 'i'} {n} versament{'o' if n == 1 else 'i'}",
-                                  "Dettaglio": "dettaglio nel registro riservato", "Eseguito da": "IA", "Approvato da": a.approvato})
+    pagate_ids = []
+    for v in pagate:
+        r = righe_spese[reg._norm(v.get("ID spesa"))]
+        if str(ws_sp.cell(r, col["Pagata"]).value or "").strip().upper() != "SI":
+            reg._put(ws_sp, r, col["Pagata"], "Pagata", "SI")
+            reg._put(ws_sp, r, col["Data pagamento"], "Data pagamento", data_da(v["Data pagamento"]))
+        reg._put(ws_sp, r, col["ID movimento"], "ID movimento", v.get("ID movimento"))  # già pagata a mano: solo il collegamento
+        pagate_ids.append(reg._norm(v.get("ID spesa")))
+    nuove_ids_spese = []
+    for v in nuove:
+        riga = {k: v.get(k) for k in hdr_sp if k != "ID" and not reg._blank(v.get(k))}
+        riga["Importo"] = float(importo_da(riga["Importo"]))
+        riga["Pagata"] = "SI"
+        nuove_ids_spese.append(reg.aggiungi(ws_sp, riga)[1])
+    # Diario pubblico: solo i conteggi, mai nomi o importi
+    parti = []
+    if righe:
+        parti.append(f"Registrat{'o' if len(righe) == 1 else 'i'} {_plurale(len(righe), 'versamento', 'versamenti')}")
+    if pagate:
+        parti.append(_plurale(len(pagate), "spesa segnata pagata", "spese segnate pagate"))
+    if nuove:
+        parti.append(_plurale(len(nuove), "nuova spesa pagata", "nuove spese pagate"))
+    if parti:
+        _diario(wb_c, ", ".join(parti), a.approvato)
     reg._save(wb_r, path_r, a.oggi)
     reg._save(wb_c, path_c, a.oggi)
     unita = sorted({str(v.get("ID unità")).strip() for v in righe})
     sit = [s for s in reg.situazione(openpyxl.load_workbook(path_r), a.oggi) if s["ID unità"] in unita]
-    print(json.dumps({"ok": True, "registrati": n, "ID": ids, "situazioni_create": situazioni_create,
+    print(json.dumps({"ok": True, "registrati": len(righe), "ID": ids, "situazioni_create": situazioni_create,
+                      "spese_pagate": pagate_ids, "nuove_spese": nuove_ids_spese,
                       "situazione": [{k: s[k] for k in ("ID unità", "Esercizio", "Dovuto", "Versato", "Saldo", "Scaduto")} for s in sit]},
                      ensure_ascii=False, indent=2, default=str))
 

@@ -196,6 +196,9 @@ def testo_riepilogo(st):
         righe.append(f"Rate scadute: {_n(pag['unita_in_ritardo'], 'unità', 'unità')}, {reg.euro_it(pag['totale_scaduto'])}")
     if st["bozze"]:
         righe.append(_n(len(st["bozze"]), "prospetto in bozza", "prospetti in bozza"))
+    if st.get("spese_senza_documento"):
+        righe.append(_n(len(st["spese_senza_documento"]), "spesa pagata", "spese pagate")
+                     + f" senza documento in archivio da oltre {reg.GIORNI_SENZA_DOCUMENTO} giorni")
     problemi = st["registro"]["problemi"]
     stato_reg = "Registro in ordine" if not problemi else f"Registro: {_n(len(problemi), 'problema', 'problemi')} da correggere"
     righe.append(stato_reg + (" · Modalità collaudo attiva" if st["condominio"]["collaudo"] else ""))
@@ -223,7 +226,7 @@ def main():
     kv = reg._kv(wb_c["Condominio"])
     esercizio = int(reg._num(kv.get("Esercizio corrente")) or a.oggi.year)
     fine = reg._as_date(kv.get("Fine esercizio"))
-    problemi, avvisi = reg.verifica(wb_c)
+    problemi, avvisi = reg.verifica(wb_c, a.oggi)
     sc = scadenze(wb_c, a.oggi)
     st = {
         "oggi": a.oggi,
@@ -236,6 +239,7 @@ def main():
         "assemblea": {"convocazione_inviata": convocazione_inviata(wb_c, sc["assemblea"]),
                       "termine_rendiconto": fine + dt.timedelta(days=GIORNI_RENDICONTO) if fine and fine < a.oggi else None},
         "bozze": bozze(a.dir, a.oggi),
+        "spese_senza_documento": reg.spese_senza_documento(wb_c, a.oggi),
         "pagamenti": pagamenti(a.dir, wb_c, a.oggi, esercizio),
     }
     if st["pagamenti"] is None:

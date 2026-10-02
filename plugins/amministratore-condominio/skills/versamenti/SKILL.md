@@ -1,9 +1,9 @@
 ---
 name: versamenti
 description: >
-  Registra i pagamenti dei condomini, uno alla volta o da un estratto conto bancario in PDF,
-  abbinandoli a unità e rate. Usare per "registra un versamento", "ha pagato", "bonifico",
-  "estratto conto della banca", "chi ha pagato".
+  Registra i pagamenti dei condomini (singoli o da estratto conto PDF) su unità e rate, e dagli
+  addebiti segna le spese pagate. Usare per "registra un versamento", "ha pagato", "bonifico",
+  "estratto conto della banca", "chi ha pagato", "spese pagate".
 metadata:
   version: "0.5.0"
 ---
@@ -28,16 +28,19 @@ condivisa, proporre di spostarlo lì prima di tutto.
 
 ### 1. Movimenti
 
-Scrivere un JSON con **solo i movimenti in entrata** (accrediti), uno per riga dell'estratto:
+Scrivere un JSON con **tutti i movimenti** dell'estratto, uno per riga: gli accrediti con importo
+positivo, gli addebiti con importo **negativo**:
 
 ```json
-[{"data": "2026-09-10", "importo": 150.25, "ordinante": "VERDI LUCA", "causale": "CONDOMINIO RATA 3 INT 3"}]
+[{"data": "2026-09-10", "importo": 150.25, "ordinante": "VERDI LUCA", "causale": "CONDOMINIO RATA 3 INT 3"},
+ {"data": "2026-09-05", "importo": -412.50, "ordinante": "ENEL ENERGIA SPA", "causale": "ADDEBITO SDD"}]
 ```
 
 - **Da estratto conto PDF**: trascrivere data valuta o contabile (la stessa per tutto l'estratto),
-  importo, ordinante e causale **così come sono scritti**, senza interpretare. Contare gli
-  addebiti e i movimenti che non sono bonifici di condomini (interessi, giroconti) e dirlo in
-  chiusura, senza trascriverli. Salvare il JSON accanto al PDF: `estratti conto/<nome pdf>.movimenti.json`.
+  importo con il segno, controparte e causale **così come sono scritti**, senza interpretare. In
+  `ordinante` va la controparte: chi paga per gli accrediti, chi riceve (o la descrizione
+  dell'addebito: "COMMISSIONI TENUTA CONTO") per gli addebiti. Salvare il JSON accanto al PDF:
+  `estratti conto/<nome pdf>.movimenti.json`.
 - **Da una frase** ("registra 150 € dall'interno 3, bonifico del 10 settembre"): un solo
   movimento con `"unita": "U03"` (l'ID dell'unità indicata), senza ordinante. Se la data non è
   detta, chiederla: non usare oggi per default.
@@ -52,15 +55,29 @@ Non scrive nulla. Per ogni movimento l'esito è:
 - `proposto` — unità, rata coperta (`copre`), motivi (nome, interno nella causale, importo
   uguale alla rata) e la riga `versamento` pronta;
 - `da_abbinare` — `motivo` (nessun indizio, indizi deboli, più unità possibili) e fino a 3 `candidati`;
-- `gia_registrato` — c'è già in `Versamenti` (stesso movimento: data, importo, ordinante);
-- `ignorato` — addebito o importo nullo.
+- `gia_registrato` — c'è già in `Versamenti` o in `Spese` (stesso movimento: data, importo, ordinante);
+- `ignorato` — importo nullo, o movimento della banca in entrata (interessi): non è un versamento.
 
-Mostrare una tabella unica, come in `archivio`:
+Per gli **addebiti** (un addebito paga **una** spesa: mai somme di più spese):
+- `spesa_pagata` — la spesa con lo stesso importo (`id_spesa`, fornitore, motivi) e la riga
+  `spesa_pagata` pronta. Se `gia_pagata` è vero, la spesa era già segnata pagata a mano: si collega
+  solo l'addebito, la data di pagamento resta quella scritta;
+- `spesa_da_abbinare` — più spese con lo stesso importo, o una sola ma senza fornitore né data
+  plausibile: `candidati` da mostrare, decide l'utente (anche "nessuna": diventa una nuova spesa);
+- `nuova_spesa` — nessuna spesa con quell'importo: la riga `nuova_spesa` pronta, già pagata. Per le
+  spese bancarie (commissioni, canoni, bolli: `spesa_bancaria`) tabella `A` e quota conduttore 0
+  sono già compilate; per le altre **proporre** `Tabella` e `Quota conduttore %` con i criteri di
+  `archivio` e farli confermare: lo script non li inventa e la registrazione le rifiuta senza tabella.
+
+Mostrare una tabella unica, entrate e uscite insieme, come in `archivio`:
 
 ```
-1. 10/09 · 150,25 € · VERDI LUCA · "RATA 3 INT 3" → U03 Luca Verdi, rata 3   (nome, interno, importo)
-2. 12/09 · 99,00 € · ROSSI · "quota"            → DA ABBINARE: U01 Mario Rossi? U05 Mario Rossi?
-3. 15/09 · 150,25 € · VERDI LUCA                 → già registrato
+1. 10/09 · +150,25 € · VERDI LUCA · "RATA 3 INT 3" → U03 Luca Verdi, rata 3   (nome, interno, importo)
+2. 12/09 · +99,00 € · ROSSI · "quota"            → DA ABBINARE: U01 Mario Rossi? U05 Mario Rossi?
+3. 15/09 · +150,25 € · VERDI LUCA                 → già registrato
+4. 05/09 · −412,50 € · ENEL ENERGIA               → paga la spesa 1 (ENEL, luce scale, 14/03)
+5. 20/09 · −4,50 € · COMMISSIONI TENUTA CONTO     → nuova spesa bancaria, tabella A
+6. 22/09 · −150,00 € · IDRAULICO BIANCHI          → nuova spesa: tabella A? quota conduttore 100%? (documento da archiviare)
 ```
 
 Per ogni `da_abbinare` chiedere a chi attribuirlo (o se ignorarlo: può essere un rimborso, un
@@ -73,15 +90,26 @@ poter vedere che l'abbinamento viene dalla memoria e non dal nome.
 
 ### 3. Registrazione (solo dopo conferma)
 
-Scrivere in un JSON l'elenco delle righe `versamento` confermate, poi:
+Scrivere in un JSON le righe confermate, divise per tipo:
+
+```json
+{"versamenti": [<righe "versamento">], "spese_pagate": [<righe "spesa_pagata">], "nuove_spese": [<righe "nuova_spesa">]}
+```
+
+(un elenco semplice di versamenti, come nella 0.5, funziona ancora). Poi:
 
 ```bash
 python3 "${CLAUDE_SKILL_DIR}/scripts/abbina.py" registra --dir "<cartella>" --versamenti "<confermati.json>" --approvato "<nome>"
 ```
 
-Lo script ricontrolla tutto prima di scrivere (unità esistenti, movimenti non già registrati),
-crea le righe di `Situazione` mancanti e scrive nel Diario **solo il numero** dei versamenti. Se
-esce con `"ok": false`, nulla è stato scritto: mostrare gli errori e correggere.
+Lo script ricontrolla tutto prima di scrivere (unità e spese esistenti, spese non già collegate a un
+addebito, nuove spese con la tabella, movimenti non già registrati), crea le righe di `Situazione`
+mancanti e scrive nel Diario **solo i conteggi**. Se esce con `"ok": false`, nulla è stato
+scritto: mostrare gli errori e correggere.
+
+Le nuove spese nate da un addebito "con documento da archiviare" restano senza `File` finché la
+fattura o la bolletta non arriva in `da analizzare/`: la skill `archivio` le completa. Dopo 30
+giorni `verifica` e il riepilogo le segnalano.
 
 ### Memoria di chi paga per chi
 

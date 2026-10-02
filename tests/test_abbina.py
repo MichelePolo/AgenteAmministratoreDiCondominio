@@ -83,9 +83,11 @@ class TestAbbina(BaseAbbina):
         self.assertEqual((m["esito"], m["unita"]), ("proposto", "U02"))
         self.assertEqual(m["motivi"], ["nome completo (Paolo Gialli)"])
 
-    def test_addebiti_ignorati(self):
+    def test_addebito_non_e_un_versamento(self):
+        """Fino alla 0.5 gli addebiti si ignoravano; dalla 0.6 si abbinano alle spese (test_addebiti.py)."""
         [m] = self.proponi([self.bonifico("ENEL ENERGIA", "addebito SDD", -412.5)])
-        self.assertEqual(m["esito"], "ignorato")
+        self.assertEqual((m["esito"], m["id_spesa"]), ("spesa_pagata", 1))
+        self.assertNotIn("versamento", m)
 
     def test_due_bonifici_uguali_coprono_rate_successive(self):
         rata = self.rate["U03"]["rate"][0]

@@ -92,8 +92,14 @@ Per ogni file confermato, nell'ordine:
 
 1. `mkdir -p` della cartella di destinazione, `mv` del file. Se esiste già un file con lo stesso
    nome, aggiungere suffisso `_2` e annotarlo.
-2. Se genera una spesa: `registro.py append Spese '{...}'` con `File` = percorso relativo di
-   destinazione e `Quota conduttore %` valorizzata. Conservare l'`ID` restituito.
+2. Se genera una spesa, **prima** cercare se è già stata registrata da un addebito dell'estratto
+   conto: `registro.py read Spese --where "File="` e, tra queste, una spesa con lo stesso importo,
+   lo stesso fornitore e `Note` con "documento da archiviare". Se c'è (dirlo già nella proposta:
+   "completa la spesa 7, pagata il 5 settembre"), completarla invece di crearne una nuova:
+   `registro.py update Spese --where "ID=<n>" '{"File": "...", "Descrizione": "...", "Note": "documento archiviato il <oggi>"}'`
+   (senza toccare `Pagata`, `Data pagamento`, `ID movimento`). Altrimenti
+   `registro.py append Spese '{...}'` con `File` = percorso relativo di destinazione e
+   `Quota conduttore %` valorizzata. Conservare l'`ID`.
 3. `registro.py append Indice '{"Hash":..., "Nome originale":..., "Nome archivio":..., "Percorso":..., "Data elaborazione":"<oggi>", "ID spesa": <id o vuoto>}'`.
 4. Duplicati: `mv` in `archivio/<anno>/altro/duplicati/` mantenendo il nome originale; riga in
    `Indice` con `Nome archivio` = `DUPLICATO di <percorso copia>`.
@@ -111,7 +117,8 @@ perché non classificabile, dirlo esplicitamente e chiedere all'utente cosa sia.
 
 - Mai spostare, rinominare o cancellare senza la conferma del punto 3.
 - Mai cancellare: i duplicati si spostano.
-- Mai registrare una spesa senza `File` valorizzato (tranne spese inserite a mano dall'utente).
+- Mai registrare una spesa senza `File` valorizzato (tranne spese inserite a mano dall'utente e
+  spese nate da un addebito dell'estratto conto, skill `versamenti`).
 - Importi: usare il totale del documento. Se ci sono più importi (acconto/saldo), chiedere.
 - **Estratti conto bancari** del condominio (movimenti con nomi, IBAN e causali dei condomini):
   non archiviarli nella cartella condivisa. Proporre di spostarli in `<cartella riservata>/estratti

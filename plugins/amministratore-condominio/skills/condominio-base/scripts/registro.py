@@ -693,7 +693,23 @@ def cmd_diario(a):
     print(json.dumps({"ok": True, "riga": r}))
 
 
-def verifica(wb):
+NOTA_DA_ARCHIVIARE = "documento da archiviare"  # Note delle spese nate da un addebito, in attesa del documento
+GIORNI_SENZA_DOCUMENTO = 30
+
+
+def spese_senza_documento(wb, oggi=None, giorni=GIORNI_SENZA_DOCUMENTO):
+    """ID delle spese pagate da un addebito il cui documento non è ancora in archivio da più di `giorni` giorni."""
+    oggi = oggi or dt.date.today()
+    out = []
+    for r in _rows(wb["Spese"]) if "Spese" in wb.sheetnames else []:
+        if _blank(r.get("File")) and NOTA_DA_ARCHIVIARE in str(r.get("Note") or ""):
+            quando = _as_date(r.get("Data pagamento")) or _as_date(r.get("Data"))
+            if quando and (oggi - quando).days > giorni:
+                out.append(_norm(r.get("ID")))
+    return out
+
+
+def verifica(wb, oggi=None):
     """Controlli di coerenza del registro. Restituisce (problemi bloccanti, avvisi); non scrive nulla."""
     problemi, avvisi = [], []
     ids_a, conduttori = [], []
@@ -753,6 +769,9 @@ def verifica(wb):
                 senza_pct = [r.get("ID") for r in sp if not _blank(r.get("Importo")) and _blank(r.get("Quota conduttore %"))]
                 if senza_pct:
                     avvisi.append(f"Spese senza 'Quota conduttore %' (nel prospetto andranno tutte al proprietario): ID {senza_pct}")
+        senza_doc = spese_senza_documento(wb, oggi)
+        if senza_doc:
+            avvisi.append(f"Spese pagate da più di {GIORNI_SENZA_DOCUMENTO} giorni ma senza documento in archivio: ID {senza_doc}")
     if "Condominio" in wb.sheetnames:
         kv = _kv(wb["Condominio"])
         for k in ("Nome", "Amministratore", "Email amministratore"):
@@ -769,7 +788,7 @@ def verifica(wb):
 def cmd_verifica(a):
     wb = _wb(a.path)
     _save(wb, a.path, a.oggi)  # riscrive i valori derivati: utile dopo modifiche fatte a mano nel foglio
-    problemi, avvisi = verifica(wb)
+    problemi, avvisi = verifica(wb, a.oggi)
     _out({"ok": not problemi, "problemi": problemi, "avvisi": avvisi})
     sys.exit(0 if not problemi else 1)
 
